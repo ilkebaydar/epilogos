@@ -1,0 +1,309 @@
+# Software Engineering — Project Plan
+
+## Cover Page
+
+| Field | Details |
+|---|---|
+| **Course** | BLG411E — Software Engineering |
+| **Report name** | Project Plan |
+| **Project title** | Epilogos — Intelligent Post-Meeting Workflow Platform |
+| **Group name / number** | 4 Bytes |
+| **Group members** | Furkan Kural — 150210056, İlke Başak Baydar — 150140709, Muhammed Yunus Doğru — 150210092, Mehmet Enes Tekgöz — 150210089, Abdul Akhundzada — 150220926 |
+| **Instructor** | Ayşe Tosun Kühn, Tolga Ovatman |
+| **Submission date** | 2026-10-25 |
+| **Document version** | 1.0 |
+
+---
+
+## 1. Introduction
+
+### 1.1 Scope
+
+**Project overview:**  
+Engineering teams make many technical decisions and assign many follow-up tasks during architecture reviews, sprint plannings and technical syncs. These outcomes are usually captured manually, if at all, and a significant part of them never reaches the team's backlog. Epilogos is a web platform for agile software teams and engineering managers. A user uploads a recorded meeting, and the system produces a timestamped transcript with speaker labels. It then extracts the decisions and action items as schema-validated structured items and lets the user review and approve them. Approved items are exported to Atlassian Jira as tasks and sub-tasks in one click.
+
+**In scope:**
+- **Media ingestion & asynchronous processing:** Upload of MP4, MKV and WAV recordings, background job orchestration (Celery + Redis), queue management and job progress tracking.
+- **Speaker-attributed transcription:** Timestamped transcripts with speaker labels, produced with faster-whisper and pyannote.audio. Speaker identity is scoped to a single meeting, and users can rename labels such as "Speaker 1".
+- **Core inference engine:** A self-hosted vLLM server running Qwen 2.5 3B Instruct (local mode) and an OpenAI-compatible cloud adapter (cloud mode). The active mode is selected through configuration (`.env`).
+- **Action item & decision extraction:** LLM-based parsing of transcripts into structured items (title, assignee, description, priority), with strict Pydantic schema validation via Instructor.
+- **Human review step:** users edit, approve or reject extracted items before export.
+- **Atlassian Jira integration:** One-way creation of Jira tasks and sub-tasks from approved items via the Jira Cloud REST API.
+- **Synchronized playback interface:** A web dashboard that pairs audio/video playback with an interactive transcript. Clicking a transcript line seeks the player to that timestamp.
+- **Data protection:** JWT authentication, role-based access control (RBAC), encrypted storage of Jira credentials, and a PII masking engine that masks secrets and personal data (tokens, API keys, passwords, e-mail addresses) before any text reaches an LLM or Jira.
+- **Dual-mode deployment:** A local-first Docker Compose deployment, and a live cloud deployment with a public URL for demonstration.
+
+**Optional scope:**
+- Turkish-language meeting support.
+- Export of a meeting summary (decisions and action items) as Markdown or PDF.
+- Full-text search across past meetings' transcripts and decisions.
+- In-app or e-mail notification when processing finishes.
+
+**Out of scope:**
+- Live call bots that join Zoom, Google Meet or MS Teams calls and real-time or streaming transcription.
+- Biometric speaker enrollment and cross-meeting speaker identity databases.
+- Two-way Jira synchronization (status changes in Jira are not mirrored back to Epilogos).
+- Speaker diarization in cloud mode (see the deployment architecture below).
+- Paid, always-on production hosting, native mobile applications and issue trackers other than Jira.
+
+**Architecture and technology decisions:**
+
+- **AI-assisted development tools:** Claude Code and Cursor / Antigravity. They generate boilerplate code, UI templates, test skeletons and first drafts of documentation and reports. They are not part of the product and all their output is reviewed by a team member through a pull request.
+  - **AI usage tracking & transparency:** To satisfy course reporting requirements on AI tool usage, the team follows a structured protocol for documenting core system prompts and AI-assisted architectural decisions. While raw iterative prompts are kept local and excluded from version control via .gitignore, summarized markdown logs and reports of major AI interactions are maintained within the docs/ai-prompts/ directory when needed for course submissions. Each team member tracks estimated time saved and reviews all AI-generated code/text via pull requests.
+  - **Key prompt log:** In addition, the prompts that led to fundamental changes in the code or documents (e.g., architecture, database schema or major refactoring) are kept in a separate log, apart from the general interaction logs, together with a link to the pull request they produced. This log is used as the source for the AI-usage sections of the course reports.
+- **Core product AI engine:** the AI that runs inside Epilogos. It has three parts:
+  - **Speech:** faster-whisper for speech-to-text and pyannote.audio for diarization.
+  - **Extraction:** An LLM accessed through an OpenAI-compatible interface (Instructor + Pydantic).
+  - **Inference engine (local mode):** vLLM. It was chosen for its high throughput, efficient memory management (PagedAttention) and OpenAI-compatible API, which lets the same client code run against local and cloud back-ends.
+
+*Model selection & cloud flexibility:*
+- **Local Mode:** Qwen 2.5 3B Instruct (4-bit AWQ) is configured to guarantee reliable structured Pydantic extraction while fitting within consumer GPU VRAM alongside faster-whisper and pyannote.audio.
+- **Cloud Mode:** Heavy inference is offloaded via OpenAI-compatible endpoints (Groq, OpenRouter, etc.), allowing seamless configuration of larger hosted models (e.g., Qwen 3.8 27B or equivalent high-capability open models) without any code modifications.
+- **Configuration-based choice:** The model name, API key, endpoint and mode are strictly managed via `.env`.
+
+
+*Dual-mode deployment (`INFERENCE_MODE`):*
+- **Local mode (`INFERENCE_MODE=local`) — primary, local-first, zero-trust.**
+  - The full stack runs with Docker Compose on a machine with a consumer GPU: FastAPI, PostgreSQL, Redis, Celery workers, vLLM (Qwen 2.5 3B), faster-whisper and pyannote.audio.
+  - No meeting data leaves the machine. This mode is used for development and for privacy-sensitive use.
+- **Cloud mode (`INFERENCE_MODE=cloud`) — live demo with a public URL at $0 budget.**
+  - **Hosting:** the platform is deployed on Render's free tier. Render offers no free background-worker instance type, so the cloud deployment runs the FastAPI application and an embedded Celery worker inside a single free web service (512 MB RAM).
+  - **Inference:** heavy inference is delegated to free OpenAI-compatible cloud APIs, namely Groq (Whisper large-v3 for transcription and a hosted open model for extraction) or OpenRouter as an alternative.
+  - **Model flexibility:** While local mode uses Qwen 2.5 3B Instruct to respect GPU VRAM limits, cloud mode leverages free OpenAI-compatible endpoints (Groq / OpenRouter) to call higher-parameter hosted models (such as Qwen 2.5 32B/72B or Llama 3.3 70B) without local VRAM constraints. The Instructor extraction schemas, Pydantic validation rules, and prompts remain identical across both modes.
+  - **No diarization:** pyannote.audio does not fit in the free cloud instance, so cloud-mode transcripts have no speaker labels. The demo therefore also shows meetings processed in local mode.
+  - **Queue broker:** Redis runs on Render's free Key Value instance (25 MB, no persistence). Queued jobs can be lost if the instance restarts, so cloud mode is used only for short demo recordings and the user can re-submit a failed job.
+  - **Free-tier limits:** free cloud instances sleep when idle, have ephemeral disks, and the free managed PostgreSQL expires after 30 days. Uploaded media is therefore stored only temporarily, and the cloud database is created during W6 so that it remains available through the demo and the final presentation.
+- **PII privacy layer.** In both modes, transcripts pass through the PII masking engine (T-07) *before* they reach the LLM layer. In cloud mode the masking runs inside the Epilogos backend before any extraction request is sent. API keys, passwords, e-mail addresses and personal data therefore never reach an external LLM in unmasked form.
+- **Limit of the cloud-mode guarantee.** In cloud mode the audio itself is sent to the cloud speech-to-text provider. Full zero-leakage is therefore guaranteed only in local mode. Cloud mode is intended for the live demo with non-sensitive sample meetings.
+
+*Backend & frontend architecture — monolith:*
+- The application is a **FastAPI monolith** with server-rendered **Jinja2/HTML templates**, styled with Tailwind CSS and using lightweight JavaScript for the synchronized player.
+- This decision reduces project complexity: it removes cross-origin (CORS) configuration, a second build toolchain and a separate frontend deployment.
+- **Service-based design with a separate presentation layer:** all business functions (upload, job status, transcripts, item review, Jira export) are exposed as documented REST endpoints (OpenAPI). The frontend is a separate presentation layer inside the same deployment: Jinja2 renders the pages, and the player, progress and review screens call the REST API from JavaScript. The API can therefore be used by other clients without changes.
+- **Change from the Project Charter:** this replaces the separate Next.js frontend listed in the charter. The change is recorded in the charter revision.
+- **Portability:** the system is container-native. It runs locally with Docker Compose (local-first portability) and is cloud-ready for Render.
+
+*Database (PostgreSQL) rationale:*
+- **Strict relational hierarchy:** the data forms a foreign-key chain (Users → Meetings → Transcripts → Action Items → Jira issue keys), with cascading integrity rules.
+- **Pydantic alignment:** a typed relational schema maps cleanly to Pydantic and SQLAlchemy models.
+- **Native JSONB:** semi-structured data (raw model outputs, extraction metadata, pipeline configuration) is stored without a separate document store.
+- **Async performance:** the asyncpg driver gives high-performance asynchronous access from FastAPI.
+
+*Concurrency and queue management:*
+- **Local mode:**
+  - GPU-bound tasks (transcription, diarization, LLM extraction) run on a dedicated Celery queue with `concurrency=1` and `prefetch_multiplier=1`, to prevent VRAM conflicts on a single consumer GPU.
+  - Simultaneous uploads wait in the Redis queue and are processed sequentially. Users see their queue position and progress.
+  - I/O-bound tasks (uploads, Jira export) run on a separate queue.
+- **Cloud mode:** worker rate limits are set below the free-tier limits of the cloud APIs, and requests that hit a rate limit are retried with exponential backoff.
+
+**Assumptions and constraints:**
+- **Team:** five students taking other courses in parallel. Each member is planned at **0.5 FTE (≈20 h/week)**, split into **0.4 FTE for development** and **0.1 FTE for course documentation**.
+- **Time:** the schedule is fixed by the course. Development runs from 2026-10-26 until the **code freeze on 2026-12-25**, the demo is on 2026-12-26 and the final presentation on 2026-12-28. The intermediate report deadlines are fixed milestones.
+- **Exam weeks:** the BLG411E midterm is on 2026-11-23 (W5), in the same week as the Requirements Analysis deadline, and other courses' midterms fall around W3–W5. This is expected to reduce effective availability below the planned 0.5 FTE. The buffer for this is described in Section 4.2 and in R-10.
+- **Customer communication & meetings:** Formal customer meetings with the course teaching assistant are scheduled approximately every 2 weeks (as determined by TA). Day-to-day clarifications, scope questions, and feedback are handled asynchronously via GitHub issues/comments and the team's WhatsApp group.
+- **Budget:** zero monetary budget. The project uses open-source and open-weight models, free cloud tiers (Render, Groq/OpenRouter, Jira Cloud Free) and free datasets.
+- **Hardware:**
+  - Local mode assumes a consumer GPU with roughly 8–12 GB of VRAM.
+  - VRAM is managed by capping vLLM's GPU memory reservation (`gpu_memory_utilization`), using an AWQ-quantized LLM and int8 faster-whisper, and processing jobs sequentially, so that the speech models and the LLM do not exhaust GPU memory together.
+- **Input:** meetings are primarily in English and are uploaded after they end. A single recording is at most 90 minutes and 1 GB. In cloud mode, audio is compressed and/or split into chunks before transcription to stay within the provider's file-size limit.
+- **Benchmark datasets** (open meeting corpora, used for quality measurement):
+  - **AMI Meeting Corpus** and **ICSI Meeting Corpus:** transcription accuracy (WER) and diarization quality (DER) on multi-speaker meetings.
+  - **QMSum** and **MeetingBank:** quality of summaries and extracted items.
+  - **AMI's manual summaries** of decisions and actions: reference for evaluating the action items and decisions produced by the LLM.
+- **Test-first approach (course practice):** acceptance tests are derived from the Gherkin acceptance criteria of the user stories while the requirements are written (WBS-13.1). For deterministic modules (API endpoints, auth/RBAC, masking rules, speaker alignment, Jira field mapping), tests are written from each activity's "Done when" condition before the implementation, and a PR is merged only with its tests. Model-based stages (transcription, diarization, LLM extraction) are verified against reference recordings and expected-output ranges, with the LLM and Jira mocked in unit tests. QA/DevOps leads the test infrastructure, CI integration and end-to-end tests.
+
+### 1.2 Deliverables
+
+| Deliverable ID | Deliverable name | Description / contents | Acceptance criterion |
+|---|---|---|---|
+| D-01 | Backend Core & Async Processing Service | FastAPI monolith (REST API + server-rendered pages), SQLAlchemy/asyncpg data-access layer, Celery/Redis job orchestration with separate GPU and I/O queues, media upload and job status endpoints, OpenAPI documentation. | Runs in Docker. A valid MP4/MKV/WAV upload creates a job that is queued and processed in the background. The status endpoint reports every stage and the queue position. Integration tests pass in CI. |
+| D-02 | Speech Processing Pipeline | FFmpeg preprocessing, faster-whisper transcription, pyannote.audio diarization, alignment of text segments with speaker labels, and a cloud-mode transcription adapter. | On at least 3 sample recordings it produces a persisted, timestamped, speaker-labelled transcript (local mode) without manual intervention. WER (jiwer) and DER are measured and reported on an AMI/ICSI subset. |
+| D-03 | Core Inference Engine & Extraction Module | vLLM server configuration with Qwen 2.5 3B Instruct (AWQ), cloud adapter, `.env`-based mode and model switching, Pydantic schemas, prompts, and an Instructor-based extraction service with retries and chunking of long transcripts. | The same extraction code runs in both modes by changing only `.env`. 100% of returned items pass schema validation. Extraction quality is evaluated with DeepEval on AMI/QMSum/MeetingBank samples, and the results are reported. |
+| D-04 | Jira Integration Module | Jira Cloud connection configuration, mapping of item fields to Jira fields, task/sub-task creation, error handling and idempotent retries. | Approved items appear as correctly filled tasks/sub-tasks in a test Jira Cloud project. Retrying an export creates no duplicates. Mocked tests pass. |
+| D-05 | Web Dashboard | Server-rendered Jinja2/Tailwind interface: login, meeting list and upload, progress and queue display, synchronized player + transcript, item review/approval and Jira export. | A user can complete the upload → review → Jira export flow end to end on current Chrome and Firefox. Clicking a transcript line seeks the player to the correct timestamp. |
+| D-06 | Security & Data Protection Layer | JWT authentication, RBAC (Admin / Member / Viewer), encrypted storage of Jira credentials, and a PII masking engine applied before any LLM call or export. | Unauthenticated or unauthorized requests are rejected with 401/403. Seeded secrets in test transcripts are masked (≥ 95% recall). No unmasked transcript text is sent to an LLM in either mode. No credential is stored in plain text. |
+| D-07 | Test Suite, CI/CD & Deployment Infrastructure | Docker Compose (local mode), Render deployment (cloud mode), GitHub Actions CI/CD, test infrastructure and E2E tests in `tests/`, coverage reporting. | `docker compose up` starts the full local stack. The cloud deployment is reachable at a live URL. CI runs on every PR. Backend line coverage is ≥ 70%. |
+| D-08 | Project Documentation | Requirements Specification, Requirements Analysis, Software Design and Software Test reports, README (setup, deployment modes, team roles), API documentation, user guide, final presentation. | Every report is released on time under its required release name. The README lets a new user run both modes. |
+
+### 1.3 Functional Requirements / Tasks
+
+Number the functional tasks and map **every task** to one or more deliverables from Section 1.2.
+
+| Task ID | Functional requirement / task | Description | Related deliverable ID(s) |
+|---|---|---|---|
+| T-01 | [Task 1] | [Expected behavior or function] | D-01 |
+| T-02 | [Task 2] | [Expected behavior or function] | D-01, D-02 |
+| T-03 | [Task 3] | [Expected behavior or function] | D-03 |
+
+### 1.4 Non-functional Issues
+
+Describe relevant quality attributes, including security, performance, and usability.
+
+| Quality attribute | Requirement / concern | How it will be assessed |
+|---|---|---|
+| Security | [Access control, data protection, etc.] | [Test or assessment] |
+| Performance | [Response time, throughput, etc.] | [Measurement or test] |
+| Usability | [Accessibility, ease of use, etc.] | [Evaluation method] |
+| Reliability | [Availability, error handling, etc., if relevant] | [Test or assessment] |
+| Other | [Additional non-functional issue] | [Test or assessment] |
+
+---
+
+## 2. Project Plan — Work Breakdown Structure (WBS)
+
+Decompose the tasks in Section 1.3 into smaller **subtasks / activities**. Give each WBS activity a unique ID, link it to its parent task, and estimate its size on this five-level scale:
+
+**T = Tiny · S = Small · M = Medium · L = Large · XL = Extra-large**
+
+| WBS activity ID | Parent task ID | Activity / subtask | Description / completion condition | Size (T/S/M/L/XL) |
+|---|---|---|---|---|
+| WBS-1.1 | T-01 | [Activity 1] | [Description and completion criterion] | [T/S/M/L/XL] |
+| WBS-1.2 | T-01 | [Activity 2] | [Description and completion criterion] | [T/S/M/L/XL] |
+| WBS-2.1 | T-02 | [Activity 3] | [Description and completion criterion] | [T/S/M/L/XL] |
+| WBS-3.1 | T-03 | [Activity 4] | [Description and completion criterion] | [T/S/M/L/XL] |
+
+**WBS decomposition notes:**  
+[Explain how activities were divided, including important assumptions or dependencies.]
+
+> **Course guideline note:** User stories for these subtasks will be written in the separate requirements document; this project plan defines and sizes the subtasks.
+
+---
+
+## 3. Estimates
+
+Estimate effort for **each WBS activity** in **man-weeks (person-weeks)**. Keep the WBS IDs aligned with Section 2.
+
+| WBS activity ID | Size | Estimated effort (man-weeks) | Basis / assumptions |
+|---|---|---|---|
+| WBS-1.1 | [T/S/M/L/XL] | [Number] | [Reason for estimate] |
+| WBS-1.2 | [T/S/M/L/XL] | [Number] | [Reason for estimate] |
+| WBS-2.1 | [T/S/M/L/XL] | [Number] | [Reason for estimate] |
+| WBS-3.1 | [T/S/M/L/XL] | [Number] | [Reason for estimate] |
+| **Total** | — | **[Sum of all estimates]** | — |
+
+**Estimation method:**  
+[Explain how your team converted WBS sizes and expected work into man-week estimates.]
+
+**Effort versus duration:** If an activity requires **2 man-weeks** and **2 fully allocated team members** can work in parallel, its estimated duration is **1 week** (assuming no other constraints). Scheduling must account for actual availability and dependencies. Also, take the AI agent(s) into the account.
+---
+
+## 4. Resources
+
+### 4.1 Team Structure and Member Roles
+
+| Member | Student ID | Role(s) | Main responsibilities |
+|---|---|---|---|
+| [Member 1] | [ID] | [Role] | [Responsibilities] |
+| [Member 2] | [ID] | [Role] | [Responsibilities] |
+| [Member 3] | [ID] | [Role] | [Responsibilities] |
+
+### 4.2 Member-to-Activity Assignment
+
+Map group members to their assigned **WBS activities**. Use additional rows when an activity has multiple assigned members.
+
+| WBS activity ID | Assigned member | Responsibility | Allocation to activity (FTE) |
+|---|---|---|---|
+| WBS-1.1 | [Member] | [Specific contribution] | [e.g., 1.0] |
+| WBS-1.2 | [Member] | [Specific contribution] | [e.g., 0.5] |
+| WBS-2.1 | [Member] | [Specific contribution] | [e.g., 1.0] |
+| WBS-3.1 | [Member] | [Specific contribution] | [e.g., 1.0] |
+
+**Availability or allocation constraints:**  
+[State any part-time allocations, competing activities, holidays, or resource limits.]
+
+---
+
+## 5. Schedule
+
+### 5.1 PERT Chart — Activity Sequence
+
+Show the order and dependency relationships between project activities. **Replace this illustrative network** with your actual WBS activities, predecessors, and estimated durations. Highlight the critical path after calculating it.
+
+```mermaid
+flowchart LR
+    START((Start)) --> A["WBS-1.1<br/>[Activity name]"]
+    A --> B["WBS-1.2<br/>[Activity name]"]
+    A --> C["WBS-2.1<br/>[Activity name]"]
+    B --> D["WBS-3.1<br/>[Activity name]"]
+    C --> D
+    D --> FINISH((Finish))
+
+    %% Once the critical path is known, uncomment and modify:
+    %% classDef critical fill:#ffe1e1,stroke:#d33,stroke-width:3px;
+    %% class A,B,D critical;
+```
+
+**PERT notes (activity durations and dependencies):**  
+[Explain the network, any parallel activities, and the basis of each duration.]
+
+### 5.2 Critical Path and Total Project Duration
+
+**Critical path (in activity order):**  
+`[WBS-x.x] → [WBS-y.y] → [WBS-z.z]`
+
+| Critical-path activity ID | Duration (weeks) | Reason it is critical |
+|---|---|---|
+| [WBS-x.x] | [Number] | [No available schedule slack / dependency explanation] |
+| [WBS-y.y] | [Number] | [No available schedule slack / dependency explanation] |
+| [WBS-z.z] | [Number] | [No available schedule slack / dependency explanation] |
+
+**Total project schedule:** **[Number] weeks**, from **[YYYY-MM-DD]** to **[YYYY-MM-DD]**.
+
+**Critical-path explanation:**  
+[Explain how the critical path was identified from the PERT network and how it determines the overall project duration.]
+
+### 5.3 Gantt Chart — Project Timeline
+
+Update the example dates, activity names, and durations below using Section 5.1. The values shown here are **illustrative only and are not actual project dates**.
+
+```mermaid
+gantt
+    title [Project Title] — Replace All Example Dates and Durations
+    dateFormat YYYY-MM-DD
+    axisFormat %d %b
+
+    section [Phase / Workstream 1]
+    WBS-1.1 [Activity name] :w11, 2026-01-01, 1w
+    WBS-1.2 [Activity name] :w12, after w11, 1w
+
+    section [Phase / Workstream 2]
+    WBS-2.1 [Activity name] :w21, after w11, 2w
+    WBS-3.1 [Activity name] :w31, after w21, 1w
+```
+
+**Schedule consistency check:**  
+[Verify that dates, durations, activity dependencies, effort estimates, and member availability agree across the WBS, estimates, resource map, PERT chart, and Gantt chart.]
+
+---
+
+## 6. Risks
+
+### 6.1 Risk Impact / Probability Chart
+
+Score both **probability** and **impact** on an ascending scale from **1 (lowest)** to **5 (highest)**. Place each risk ID in the corresponding matrix cell. Both axes increase from left to right / top to bottom.
+
+**Risk register:** List risks in **ascending order of probability, then impact**. The optional score is `Probability × Impact`; retain the same scale and order throughout.
+
+| Risk ID | Risk description | Probability (1–5) | Impact (1–5) | Risk score (P × I) | Affected WBS activity ID(s) |
+|---|---|---|---|---|---|
+| R-01 | [Risk description] | [1–5] | [1–5] | [Score] | [WBS-x.x] |
+| R-02 | [Risk description] | [1–5] | [1–5] | [Score] | [WBS-y.y] |
+| R-03 | [Risk description] | [1–5] | [1–5] | [Score] | [WBS-z.z] |
+
+| Impact ↓ / Probability → | 1 (Very low) | 2 (Low) | 3 (Medium) | 4 (High) | 5 (Very high) |
+|---|---|---|---|---|---|
+| **1 — Very low** | [Risk IDs / —] | [—] | [—] | [—] | [—] |
+| **2 — Low** | [—] | [—] | [—] | [—] | [—] |
+| **3 — Medium** | [—] | [—] | [—] | [—] | [—] |
+| **4 — High** | [—] | [—] | [—] | [—] | [—] |
+| **5 — Very high** | [—] | [—] | [—] | [—] | [—] |
+
+### 6.2 Risk Mitigation / Aversion Plan
+
+Map **every identified risk** to relevant project activities and record preventive or mitigating actions.
+
+| Risk ID | Related WBS activity ID(s) | Mitigation / avoidance strategy | Responsible member | Contingency if risk occurs |
+|---|---|---|---|---|
+| R-01 | [WBS-x.x] | [Actions to reduce probability or impact] | [Member] | [Fallback response] |
+| R-02 | [WBS-y.y] | [Actions to reduce probability or impact] | [Member] | [Fallback response] |
+| R-03 | [WBS-z.z] | [Actions to reduce probability or impact] | [Member] | [Fallback response] |
