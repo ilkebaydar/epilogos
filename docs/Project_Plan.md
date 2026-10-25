@@ -127,13 +127,21 @@ Engineering teams make many technical decisions and assign many follow-up tasks 
 
 ### 1.3 Functional Requirements / Tasks
 
-Number the functional tasks and map **every task** to one or more deliverables from Section 1.2.
-
 | Task ID | Functional requirement / task | Description | Related deliverable ID(s) |
 |---|---|---|---|
-| T-01 | [Task 1] | [Expected behavior or function] | D-01 |
-| T-02 | [Task 2] | [Expected behavior or function] | D-01, D-02 |
-| T-03 | [Task 3] | [Expected behavior or function] | D-03 |
+| T-01 | User authentication & access control | Users register and log in and receive a JWT. Roles (Admin / Member / Viewer) restrict actions: only Admins configure Jira, and Viewers cannot approve or export items. Jira credentials are stored securely. | D-06, D-01 |
+| T-02 | Meeting media upload | Users upload MP4, MKV or WAV files. Format and size are validated, and the file is stored and linked to a meeting record. | D-01 |
+| T-03 | Asynchronous job processing & progress tracking | Each upload starts a queued background job that chains the pipeline stages, with concurrency rules per mode. Its status (queued, preprocessing, transcribing, diarizing, masking, extracting, completed, failed) and queue position are persisted and exposed to the client. | D-01 |
+| T-04 | Media preprocessing | FFmpeg extracts the audio track and converts it into normalized 16 kHz mono audio. In cloud mode it also compresses and/or chunks the audio to stay within the provider's file-size limit. | D-02 |
+| T-05 | Speech-to-text transcription | faster-whisper (local) or the cloud Whisper API (cloud) produces timestamped transcript segments. | D-02 |
+| T-06 | Speaker diarization & attribution | pyannote.audio identifies speaker turns (local mode), and each transcript segment is attributed to a speaker label within the meeting. | D-02 |
+| T-07 | PII & secret masking | Rule-based masking removes tokens, API keys, passwords and e-mail addresses from transcripts before they are stored, sent to any LLM or exported to Jira. | D-06, D-02 |
+| T-08 | Inference engine & action item / decision extraction | The vLLM/Qwen engine (local) or the cloud adapter extracts decisions and action items (title, assignee, description, priority), and each item is validated against a strict schema. | D-03 |
+| T-09 | Review & approval of extracted items | Users view, edit, approve or reject extracted items before export. Extracted decisions are listed separately on the review screen and are not exported to Jira. | D-01, D-03, D-05 |
+| T-10 | Jira export | Approved items are created as Jira tasks and sub-tasks in the configured project via the Jira Cloud REST API. The assignee is resolved by matching the assignee name (the renamed speaker label, or the name extracted by the LLM in cloud mode) to a Jira user; unmatched items are created unassigned. | D-04 |
+| T-11 | Dashboard & synchronized playback | Server-rendered pages list meetings and handle uploads. The recording plays alongside the interactive transcript, with seek on click, current-line highlighting and speaker renaming. | D-05 |
+| T-12 | Testing, CI/CD & deployment | Test infrastructure and E2E tests, a CI/CD pipeline, and the local (Docker Compose) and cloud (Render) deployments. | D-07 |
+| T-13 | Project documentation | All course reports, README, API documentation, user guide and final presentation. | D-08 |
 
 ### 1.4 Non-functional Issues
 
