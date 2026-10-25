@@ -208,20 +208,73 @@ Size scale: **T = Tiny · S = Small · M = Medium · L = Large · XL = Extra-lar
 
 ## 3. Estimates
 
-Estimate effort for **each WBS activity** in **man-weeks (person-weeks)**. Keep the WBS IDs aligned with Section 2.
+**Size-to-effort bands used by the team:**
+
+| Size | Effort band (man-weeks) | Typical meaning |
+|---|---|---|
+| T — Tiny | ≤ 0.2 | A thin layer on existing components, about half a member-week |
+| S — Small | 0.3 – 0.5 | One well-understood component, about one week for one member at 0.4 FTE |
+| M — Medium | 0.6 – 1.0 | A component with integration or learning effort, about two weeks for one member |
+| L — Large | 1.1 – 1.5 | A complex component, about three weeks for one member |
+| XL — Extra-large | > 1.5 | Team-wide integration work |
 
 | WBS activity ID | Size | Estimated effort (man-weeks) | Basis / assumptions |
 |---|---|---|---|
-| WBS-1.1 | [T/S/M/L/XL] | [Number] | [Reason for estimate] |
-| WBS-1.2 | [T/S/M/L/XL] | [Number] | [Reason for estimate] |
-| WBS-2.1 | [T/S/M/L/XL] | [Number] | [Reason for estimate] |
-| WBS-3.1 | [T/S/M/L/XL] | [Number] | [Reason for estimate] |
-| **Total** | — | **[Sum of all estimates]** | — |
+| WBS-1.1 | M | 0.8 | Around 8 related tables plus migrations. Schema design needs a team review. |
+| WBS-1.2 | M | 0.8 | Standard FastAPI JWT pattern, but RBAC has to be applied consistently across all endpoints, with tests. |
+| WBS-1.3 | S | 0.4 | A well-known encryption library, with limited scope. |
+| WBS-2.1 | S | 0.4 | A standard upload endpoint. Validation of large files and their duration adds some work. |
+| WBS-3.1 | S | 0.4 | Boilerplate largely generated with the AI tools, then reviewed and structured by the backend lead. |
+| WBS-3.2 | M | 0.8 | Queue separation, concurrency rules, retries and persistence carry integration risk. |
+| WBS-3.3 | T | 0.2 | A thin endpoint on top of the job model. Runs in parallel with WBS-9.1 at 0.2 FTE each. |
+| WBS-3.4 | M | 0.8 | Chaining five stages in two modes with failure handling. Depends on the outputs of other members. |
+| WBS-4.1 | S | 0.4 | FFmpeg commands are well documented. Testing all formats and the cloud-mode chunking is the main effort. |
+| WBS-5.1 | M | 0.8 | Model setup, CPU/GPU configuration, plus a cloud adapter behind the same interface. |
+| WBS-6.1 | M | 0.8 | pyannote setup, Hugging Face gated-model access and parameter tuning. |
+| WBS-6.2 | S | 0.4 | An overlap-based alignment algorithm plus persistence. |
+| WBS-6.3 | M | 0.8 | Dataset preparation (AMI/ICSI subsets), WER/DER runs and VRAM/speed experiments in two modes. |
+| WBS-7.1 | S | 0.4 | Regex rules plus a seeded test set and an outgoing-payload test. Edge cases take most of the time. |
+| WBS-8.0 | M | 0.8 | vLLM setup, AWQ model, VRAM budgeting together with the speech models, and the cloud adapter. New technology for the team. |
+| WBS-8.1 | S | 0.4 | Schema design and iterating on prompts. |
+| WBS-8.2 | M | 0.8 | Instructor integration, chunking, retries and validation in both modes. A small model needs more prompt iteration. |
+| WBS-9.1 | T | 0.2 | CRUD-style endpoints with RBAC, largely AI-assisted. Runs in parallel with WBS-3.3. |
+| WBS-9.2 | M | 0.8 | A form-heavy page. Templates drafted with the AI tools reduce the effort. |
+| WBS-10.1 | S | 0.4 | Jira Cloud API authentication and metadata endpoints. |
+| WBS-10.2 | M | 0.8 | Task/sub-task hierarchy, idempotency and rate-limit handling. Mocks are prepared early, which reduces sandbox testing time. |
+| WBS-11.1 | S | 0.4 | Server-rendered templates in the monolith with no separate frontend build. Templates are AI-assisted. |
+| WBS-11.2 | L | 1.2 | Player–transcript synchronization, long-transcript performance and speaker renaming. The most complex UI work. |
+| WBS-12.1 | S | 0.4 | Five services in Docker Compose (GPU optional), plus a basic lint + Pytest workflow from a standard template. |
+| WBS-12.2 | M | 0.8 | CI workflow plus Render deployment, which has to work within free-tier limits (single service, sleep, ephemeral disk). |
+| WBS-12.3 | M | 0.8 | Test infrastructure, E2E tests and coordination. Module unit tests are counted in each module's own estimate. |
+| WBS-12.4 | XL | 2.0 | All five members for the final working week (0.4 FTE each), for integration and bug fixing up to the code freeze. |
+| WBS-13.1 | S | 0.5 | All members at 0.1 FTE for one week. |
+| WBS-13.2 | S | 0.5 | All members at 0.1 FTE for one week. |
+| WBS-13.3 | M | 1.0 | All members at 0.1 FTE for two weeks. The largest report. |
+| WBS-13.4 | S | 0.5 | All members at 0.1 FTE for one week. |
+| WBS-13.5 | S | 0.5 | All members at 0.1 FTE for the final working week. |
+| **Total** | — | **21.0** | Development 18.0 + documentation 3.0 |
 
 **Estimation method:**  
-[Explain how your team converted WBS sizes and expected work into man-week estimates.]
+Each WBS activity was first sized on the T–XL scale by comparing it with work the team has done before, and the size was then turned into man-weeks using the bands above. For single-owner development work, the planning unit is one member-week at 0.4 FTE, i.e., **0.4 man-weeks**:
 
-**Effort versus duration:** If an activity requires **2 man-weeks** and **2 fully allocated team members** can work in parallel, its estimated duration is **1 week** (assuming no other constraints). Scheduling must account for actual availability and dependencies. Also, take the AI agent(s) into the account.
+| Size | Effort (man-weeks) | Duration for one member at 0.4 FTE |
+|---|---|---|
+| T | 0.2 | Half a week, or one week at 0.2 FTE when two Tiny activities run in parallel |
+| S | 0.4 | 1 week |
+| M | 0.8 | 2 weeks |
+| L | 1.2 | 3 weeks |
+
+All estimates include writing the module's own unit and edge-case tests (test-first). Documentation is done by all five members at 0.1 FTE, which is 0.5 man-weeks per calendar week.
+
+**Team capacity check:** 5 members × 0.5 FTE × 9 weeks = **22.5 man-weeks** available, against **21.0 man-weeks** planned. The development lane (5 × 0.4 × 9 = 18.0) is fully planned. The documentation lane has 1.5 man-weeks of unused capacity (weeks 1, 3 and 4), which serves as the schedule buffer for exam weeks (see R-10). If this buffer is used up, optional-scope features are cut first, and the benchmark subsets of WBS-6.3 are reduced.
+
+**AI agents:** The AI-assisted development tools (Claude Code, Cursor / Antigravity) are not counted as team members and have no FTE. Their contribution appears as lower effort estimates for boilerplate-heavy activities (WBS-3.1, 9.1, 9.2, 11.1, test skeletons in every module) and as faster first drafts of reports. Without AI assistance these activities would roughly need 25–30% more effort. All AI output is reviewed through pull requests, and that review time is included in the estimates. The product's own AI engine (vLLM/Qwen) is a deliverable component (WBS-8.0), not a resource.
+
+**Effort versus duration:** Duration = effort ÷ total FTE allocated to the activity. For example:
+- WBS-12.4 (2.0 man-weeks) is done by five members at 0.4 FTE each (2.0 FTE), so it takes 1 week.
+- WBS-11.2 (1.2 man-weeks) is done by one member at 0.4 FTE, so it takes 3 weeks.
+- WBS-3.3 and WBS-9.1 (0.2 man-weeks each) are done by one member at 0.2 FTE each in the same week.
+
 ---
 
 ## 4. Resources
@@ -351,30 +404,44 @@ gantt
 
 ### 6.1 Risk Impact / Probability Chart
 
-Score both **probability** and **impact** on an ascending scale from **1 (lowest)** to **5 (highest)**. Place each risk ID in the corresponding matrix cell. Both axes increase from left to right / top to bottom.
-
-**Risk register:** List risks in **ascending order of probability, then impact**. The optional score is `Probability × Impact`; retain the same scale and order throughout.
+**Risk register:** listed in ascending order of probability, then impact. Risk score = Probability × Impact.
 
 | Risk ID | Risk description | Probability (1–5) | Impact (1–5) | Risk score (P × I) | Affected WBS activity ID(s) |
 |---|---|---|---|---|---|
-| R-01 | [Risk description] | [1–5] | [1–5] | [Score] | [WBS-x.x] |
-| R-02 | [Risk description] | [1–5] | [1–5] | [Score] | [WBS-y.y] |
-| R-03 | [Risk description] | [1–5] | [1–5] | [Score] | [WBS-z.z] |
+| R-01 | A team member leaves the course or is unavailable for a long period. | 1 | 4 | 4 | All, especially zero-float activities (WBS-4.1, 5.1, 6.1, 6.2, 6.3, 3.4, 12.3, 12.4) |
+| R-02 | Jira Cloud API authentication, permission or rate-limit problems block the export. | 2 | 3 | 6 | WBS-10.1, WBS-10.2 |
+| R-03 | Access to the gated pyannote model on Hugging Face (token or license approval) is delayed. | 2 | 4 | 8 | WBS-6.1 |
+| R-04 | PII masking misses secrets or personal data, which then leak to a cloud LLM or to Jira. | 2 | 5 | 10 | WBS-7.1, WBS-8.2, WBS-10.2 |
+| R-05 | Free-tier limits of the cloud services (Groq/OpenRouter quotas and file-size limits, Render sleep and 512 MB RAM limits, a non-persistent free Redis that loses queued jobs on restart, free database expiry) disrupt the cloud-mode demo, or the free tiers change. | 3 | 2 | 6 | WBS-5.1, WBS-8.0, WBS-12.2 |
+| R-06 | Scope creep from customer-meeting requests. | 3 | 3 | 9 | WBS-9.2, WBS-11.2, WBS-12.4 |
+| R-07 | LLM output (especially from the small 3B model) fails schema validation or contains hallucinated or missing action items. | 3 | 4 | 12 | WBS-8.1, WBS-8.2 |
+| R-08 | Late integration problems between the UI, backend, inference engine and processing pipeline. | 3 | 4 | 12 | WBS-3.4, WBS-12.3, WBS-12.4 |
+| R-09 | Diarization accuracy is poor due to overlapping speech, poor audio quality or many speakers. | 4 | 3 | 12 | WBS-6.1, WBS-6.2, WBS-6.3 |
+| R-10 | Midterms and report deadlines reduce team availability below the planned 0.5 FTE (~20 h/week), especially in W3–W5. | 4 | 3 | 12 | WBS-13.1 – 13.5, and all activities in W3–W5 |
+| R-11 | Team members have no suitable local GPU, so local mode is slow or cannot be developed and tested. | 4 | 4 | 16 | WBS-5.1, WBS-6.1, WBS-6.3, WBS-8.0, WBS-3.4 |
+| R-12 | Simultaneous heavy uploads exhaust local GPU memory, hit cloud API rate limits, or pile up in the queue so that jobs stall. | 4 | 4 | 16 | WBS-3.2, WBS-3.3, WBS-3.4, WBS-8.0 |
 
 | Impact ↓ / Probability → | 1 (Very low) | 2 (Low) | 3 (Medium) | 4 (High) | 5 (Very high) |
 |---|---|---|---|---|---|
-| **1 — Very low** | [Risk IDs / —] | [—] | [—] | [—] | [—] |
-| **2 — Low** | [—] | [—] | [—] | [—] | [—] |
-| **3 — Medium** | [—] | [—] | [—] | [—] | [—] |
-| **4 — High** | [—] | [—] | [—] | [—] | [—] |
-| **5 — Very high** | [—] | [—] | [—] | [—] | [—] |
+| **1 — Very low** | — | — | — | — | — |
+| **2 — Low** | — | — | R-05 | — | — |
+| **3 — Medium** | — | R-02 | R-06 | R-09, R-10 | — |
+| **4 — High** | R-01 | R-03 | R-07, R-08 | R-11, R-12 | — |
+| **5 — Very high** | — | R-04 | — | — | — |
 
 ### 6.2 Risk Mitigation / Aversion Plan
 
-Map **every identified risk** to relevant project activities and record preventive or mitigating actions.
-
 | Risk ID | Related WBS activity ID(s) | Mitigation / avoidance strategy | Responsible member | Contingency if risk occurs |
 |---|---|---|---|---|
-| R-01 | [WBS-x.x] | [Actions to reduce probability or impact] | [Member] | [Fallback response] |
-| R-02 | [WBS-y.y] | [Actions to reduce probability or impact] | [Member] | [Fallback response] |
-| R-03 | [WBS-z.z] | [Actions to reduce probability or impact] | [Member] | [Fallback response] |
+| R-01 | All | Every module has a second member as its regular PR reviewer, so knowledge is shared. Abdul Akhundzada is the designated backup for the critical-path speech pipeline. Setup steps and design decisions are documented in the README and design report, and the board is kept up to date. | İlke Başak Baydar | Reassign the remaining work using non-critical float and drop optional-scope features. |
+| R-02 | WBS-10.1, WBS-10.2 | Create a free Jira Cloud sandbox project and API token in W1. Prepare mocks (unittest.mock) early and respect rate limits with backoff. | İlke Başak Baydar | Fall back to exporting approved items as a Jira-importable CSV file. |
+| R-03 | WBS-6.1 | Request Hugging Face access and accept the model licenses in W1, well before diarization work starts in W4. | Furkan Kural | Run a degraded mode with transcripts without speaker labels while access is pending. Evaluate an alternative open diarization model. |
+| R-04 | WBS-7.1, WBS-8.2, WBS-10.2 | Zero-leakage design: masking runs before storage, before every LLM call (in both modes) and before export. A seeded-secret test set (≥ 95% recall target) and an outgoing-payload test run in CI. The human review step (T-09) runs before every export. Cloud mode is used only with non-sensitive demo recordings. | Abdul Akhundzada | Block the export of items that contain suspicious patterns. Hot-fix the rules and re-run masking on affected transcripts. |
+| R-05 | WBS-5.1, WBS-8.0, WBS-12.2 | Keep the providers behind the OpenAI-compatible interface so they can be swapped via `.env` (Groq ↔ OpenRouter). Compress or chunk audio for the provider file-size limit. Create the free cloud database during W6 so it lasts through the presentation. Use only short demo recordings in cloud mode, so the embedded worker stays within 512 MB and a lost job can simply be re-submitted. Wake the instance before the demo. | Mehmet Enes Tekgöz | Run the demo in local mode, or switch to the alternative provider. |
+| R-06 | WBS-9.2, WBS-11.2, WBS-12.4 | Open a `customer-requests` issue for every request within 48 hours, with acceptance criteria. The PO evaluates each request against scope and remaining float before accepting it. | Furkan Kural | Defer the request to optional scope, or close it as "not planned" with written reasoning (scope/time), as the course guideline allows. |
+| R-07 | WBS-8.1, WBS-8.2 | Strict Pydantic validation via Instructor with automatic retries, low temperature, few-shot examples and chunking of long transcripts. DeepEval hallucination checks on benchmark samples. Users review every item before export. | İlke Başak Baydar | Switch to a larger model via `.env` where the hardware allows, or let users add and correct items manually in the review UI. |
+| R-08 | WBS-3.4, WBS-12.3, WBS-12.4 | Define the API contract and `.env` configuration in W1 (WBS-3.1). The monolith removes the separate frontend integration. CI runs integration tests on every PR. The stub-based end-to-end chain (increment v0.2, W4) proves the integration path early, so WBS-3.4 only plugs the finished modules into an already working chain in W7–W8. Test-first development catches integration defects as they are introduced. | Muhammed Yunus Doğru | Use the integration week (WBS-12.4) as a buffer and cut optional features to stabilize the core flow. |
+| R-09 | WBS-6.1, WBS-6.2, WBS-6.3 | Test early with realistic recordings and the AMI/ICSI benchmark subsets. Pass speaker-count hints when they are known. Users can rename speaker labels in the UI (WBS-11.2). Measure DER in WBS-6.3. | Furkan Kural | Show the transcript with timestamps but without speaker attribution, and note the limitation in the Test Report. |
+| R-10 | WBS-13.x, W3–W5 activities | The 0.1 FTE documentation lane is reserved, and its unused weeks (W1, W3, W4 = 1.5 man-weeks) are kept as an exam-period buffer: members work ahead in W1, and development hours lost in W3–W4 are recovered with the documentation capacity of those weeks. Because every development lane is fully loaded, float is not used to reorder work within a member's lane. W5 (BLG411E midterm and the Requirements Analysis deadline) has no such buffer, so work that slips there is recovered by cutting optional scope first. Report drafts are started early with AI-assisted first drafts and human review. The plan is re-checked at the weekly board meeting. | İlke Başak Baydar | Move optional-scope items to "not planned", then reduce the benchmark subsets of WBS-6.3. Reprioritize the board. |
+| R-11 | WBS-5.1, WBS-6.1, WBS-6.3, WBS-8.0, WBS-3.4 | Identify at least one team machine with a suitable consumer GPU in W1 and check free GPU options (university resources, Colab). Support CPU execution with int8 and smaller Whisper models. Develop most non-GPU work against cloud mode. | Mehmet Enes Tekgöz | Use cloud mode for development and the live demo. Run local mode only on the GPU machine and only for benchmarks and privacy demonstrations. |
+| R-12 | WBS-3.2, WBS-3.3, WBS-3.4, WBS-8.0 | **Celery worker concurrency throttling:** GPU queue with `concurrency=1` and `prefetch=1`, so jobs run sequentially. **VRAM optimization:** AWQ-quantized Qwen, capped vLLM `gpu_memory_utilization`, int8 faster-whisper. **Cloud rate-limit retry policy:** worker rate limits below the provider limits, and exponential backoff on HTTP 429. **Client progress polling timeout:** queue position is shown to the user, and stalled jobs are marked failed after a timeout. | Mehmet Enes Tekgöz | Limit the number of queued jobs per user and reject new uploads with a clear message when the queue is full. Route excess load to cloud mode when the content is not sensitive. |
