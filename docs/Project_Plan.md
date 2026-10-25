@@ -339,64 +339,252 @@ All estimates include writing the module's own unit and edge-case tests (test-fi
 
 ## 5. Schedule
 
+**Week calendar:**
+
+| Week | Dates | Week | Dates |
+|---|---|---|---|
+| W1 | 2026-10-26 – 11-01 | W6 | 2026-11-30 – 12-06 |
+| W2 | 2026-11-02 – 11-08 | W7 | 2026-12-07 – 12-13 |
+| W3 | 2026-11-09 – 11-15 | W8 | 2026-12-14 – 12-20 |
+| W4 | 2026-11-16 – 11-22 | W9 | 2026-12-21 – 12-25 (5 working days, ends at code freeze) |
+| W5 | 2026-11-23 – 11-29 | — | Demo 2026-12-26 · Final presentation 2026-12-28 |
+
 ### 5.1 PERT Chart — Activity Sequence
 
-Show the order and dependency relationships between project activities. **Replace this illustrative network** with your actual WBS activities, predecessors, and estimated durations. Highlight the critical path after calculating it.
+Durations are shown in weeks. Critical (zero-float) activities are highlighted in red. The dashed chain is the documentation workstream, which is fixed by course deadlines.
 
 ```mermaid
 flowchart LR
-    START((Start)) --> A["WBS-1.1<br/>[Activity name]"]
-    A --> B["WBS-1.2<br/>[Activity name]"]
-    A --> C["WBS-2.1<br/>[Activity name]"]
-    B --> D["WBS-3.1<br/>[Activity name]"]
-    C --> D
-    D --> FINISH((Finish))
+    START((Start))
 
-    %% Once the critical path is known, uncomment and modify:
-    %% classDef critical fill:#ffe1e1,stroke:#d33,stroke-width:3px;
-    %% class A,B,D critical;
+    W31["WBS-3.1<br/>Monolith skeleton<br/>1 wk"]
+    W121["WBS-12.1<br/>Docker env<br/>1 wk"]
+    W11["WBS-1.1<br/>DB schema<br/>2 wk"]
+    W41["WBS-4.1<br/>FFmpeg preprocessing<br/>1 wk"]
+    W81["WBS-8.1<br/>Schemas & prompts<br/>1 wk"]
+    W80["WBS-8.0<br/>Inference engine<br/>2 wk"]
+
+    W111["WBS-11.1<br/>UI templates<br/>1 wk"]
+    W21["WBS-2.1<br/>Upload API<br/>1 wk"]
+    W122["WBS-12.2<br/>CI/CD & deploy<br/>2 wk"]
+    W51["WBS-5.1<br/>Transcription<br/>2 wk"]
+    W12["WBS-1.2<br/>JWT & RBAC<br/>2 wk"]
+    W82["WBS-8.2<br/>LLM extraction<br/>2 wk"]
+    W32["WBS-3.2<br/>Celery queues<br/>2 wk"]
+    W61["WBS-6.1<br/>Diarization<br/>2 wk"]
+    W112["WBS-11.2<br/>Sync playback<br/>3 wk"]
+    W71["WBS-7.1<br/>PII masking<br/>1 wk"]
+    W13["WBS-1.3<br/>Credential storage<br/>1 wk"]
+    W33["WBS-3.3<br/>Progress API<br/>1 wk"]
+    W91["WBS-9.1<br/>Review API<br/>1 wk"]
+    W101["WBS-10.1<br/>Jira connection<br/>1 wk"]
+    W62["WBS-6.2<br/>Speaker alignment<br/>1 wk"]
+    W102["WBS-10.2<br/>Jira export<br/>2 wk"]
+    W92["WBS-9.2<br/>Review UI<br/>2 wk"]
+    W63["WBS-6.3<br/>Benchmarking<br/>2 wk"]
+    W34["WBS-3.4<br/>E2E orchestration<br/>2 wk"]
+    W123["WBS-12.3<br/>Test infra & E2E<br/>2 wk"]
+    W124["WBS-12.4<br/>Integration & demo<br/>1 wk"]
+
+    D131["WBS-13.1<br/>Req. Spec<br/>W2"]
+    D132["WBS-13.2<br/>Req. Analysis<br/>W5"]
+    D133["WBS-13.3<br/>Design report<br/>W6–W7"]
+    D134["WBS-13.4<br/>Test report<br/>W8"]
+    D135["WBS-13.5<br/>Docs & slides<br/>W9"]
+
+    FINISH((Code freeze))
+
+    START --> W31 & W121 & W11 & W41 & W81 & W80
+    W31 --> W111 & W21 & W12
+    W121 --> W111 & W21 & W122
+    W11 --> W12
+    W41 --> W51
+    W80 --> W82
+    W81 --> W82 & W101
+    W111 --> W112 & W92
+    W21 --> W32
+    W51 --> W61 & W71
+    W12 --> W13
+    W82 --> W91 & W102 & W34
+    W32 --> W33 & W91 & W62
+    W61 --> W62
+    W101 --> W102
+    W62 --> W34 & W63 & W123
+    W33 --> W34
+    W71 --> W34
+    W91 --> W92
+    W112 --> W123 & W124
+    W122 --> W123
+    W34 --> W124
+    W63 --> W124
+    W123 --> W124
+    W92 --> W124
+    W102 --> W124
+    W13 --> W124
+    W124 --> FINISH
+
+    START -.-> D131 -.-> D132 -.-> D133 -.-> D134 -.-> D135 -.-> FINISH
+
+    classDef critical fill:#ffe1e1,stroke:#d33,stroke-width:3px;
+    class W41,W51,W61,W62,W34,W63,W123,W124 critical;
 ```
 
 **PERT notes (activity durations and dependencies):**  
-[Explain the network, any parallel activities, and the basis of each duration.]
+Each duration is effort ÷ allocated FTE (Section 3). The edges are technical dependencies:
+
+- **Speech pipeline:** Sequential (4.1 → 5.1 → 6.1 → 6.2). Diarization is built on top of the working transcription worker, and speaker alignment (WBS-6.2) depends on both diarization output (WBS-6.1) and Celery job queue orchestration (WBS-3.2) to persist attributed segments.
+- **Backend chain:** 3.1 → 2.1 → 3.2 → 3.3 → 3.4.
+- **Extraction:** Needs both the inference engine (8.0) and the schemas (8.1), and feeds the Jira export (10.2), the review API (9.1) and end-to-end orchestration (3.4).
+- **UI templates:** Start right after the skeleton (11.1) and unblock the player (11.2) and the review page (9.2).
+- **Final integration:** WBS-12.4 cannot start until all functional work and the E2E suite are finished.
+
+Forward and backward pass results (ES/EF = earliest start/finish, LS/LF = latest start/finish, in weeks from project start; TF = total float):
+
+| WBS activity ID | Duration (wk) | Predecessors | ES | EF | LS | LF | TF | Scheduled |
+|---|---|---|---|---|---|---|---|---|
+| WBS-1.1 | 2 | Start | 0 | 2 | 3 | 5 | 3 | W1–W2 |
+| WBS-1.2 | 2 | 1.1, 3.1 | 2 | 4 | 5 | 7 | 3 | W3–W4 |
+| WBS-1.3 | 1 | 1.2 | 4 | 5 | 7 | 8 | 3 | W6 |
+| WBS-2.1 | 1 | 3.1, 12.1 | 1 | 2 | 2 | 3 | 1 | W2 |
+| WBS-3.1 | 1 | Start | 0 | 1 | 1 | 2 | 1 | W1 |
+| WBS-3.2 | 2 | 2.1 | 2 | 4 | 3 | 5 | 1 | W3–W4 |
+| WBS-3.3 | 1 | 3.2 | 4 | 5 | 5 | 6 | 1 | W6 |
+| **WBS-3.4** | 2 | 3.3, 6.2, 7.1, 8.2 | 6 | 8 | 6 | 8 | **0** | W7–W8 |
+| **WBS-4.1** | 1 | Start | 0 | 1 | 0 | 1 | **0** | W1 |
+| **WBS-5.1** | 2 | 4.1 | 1 | 3 | 1 | 3 | **0** | W2–W3 |
+| **WBS-6.1** | 2 | 5.1 | 3 | 5 | 3 | 5 | **0** | W4–W5 |
+| **WBS-6.2** | 1 | 3.2, 6.1 | 5 | 6 | 5 | 6 | **0** | W6 |
+| **WBS-6.3** | 2 | 6.2 | 6 | 8 | 6 | 8 | **0** | W7–W8 |
+| WBS-7.1 | 1 | 5.1 | 3 | 4 | 5 | 6 | 2 | W5 |
+| WBS-8.0 | 2 | Start | 0 | 2 | 1 | 3 | 1 | W2–W3 |
+| WBS-8.1 | 1 | Start | 0 | 1 | 2 | 3 | 2 | W1 |
+| WBS-8.2 | 2 | 8.0, 8.1 | 2 | 4 | 3 | 5 | 1 | W4–W5 |
+| WBS-9.1 | 1 | 3.2, 8.2 | 4 | 5 | 5 | 6 | 1 | W6 |
+| WBS-9.2 | 2 | 9.1, 11.1 | 5 | 7 | 6 | 8 | 1 | W7–W8 |
+| WBS-10.1 | 1 | 8.1 | 1 | 2 | 5 | 6 | 4 | W6 |
+| WBS-10.2 | 2 | 8.2, 10.1 | 4 | 6 | 6 | 8 | 2 | W7–W8 |
+| WBS-11.1 | 1 | 3.1, 12.1 | 1 | 2 | 2 | 3 | 1 | W2 |
+| WBS-11.2 | 3 | 11.1 | 2 | 5 | 3 | 6 | 1 | W3–W5 |
+| WBS-12.1 | 1 | Start | 0 | 1 | 1 | 2 | 1 | W1 |
+| WBS-12.2 | 2 | 12.1 | 1 | 3 | 4 | 6 | 3 | W5–W6 |
+| **WBS-12.3** | 2 | 6.2, 11.2, 12.2 | 6 | 8 | 6 | 8 | **0** | W7–W8 |
+| **WBS-12.4** | 1 | 1.3, 3.4, 6.3, 9.2, 10.2, 11.2, 12.3 | 8 | 9 | 8 | 9 | **0** | W9 |
+
+Some activities are scheduled later than their earliest start (e.g., WBS-12.2, WBS-10.1 and WBS-10.2) because their owner is busy with an earlier activity. This is resource levelling. Every scheduled start is at or after its ES, and every scheduled finish is at or before its LF, so the levelling uses float only and does not extend the project.
 
 ### 5.2 Critical Path and Total Project Duration
 
 **Critical path (in activity order):**  
-`[WBS-x.x] → [WBS-y.y] → [WBS-z.z]`
+`WBS-4.1 → WBS-5.1 → WBS-6.1 → WBS-6.2 → WBS-3.4 → WBS-12.4`
+
+After WBS-6.2 there are two more zero-float branches of the same length: `WBS-6.2 → WBS-6.3 → WBS-12.4` and `WBS-6.2 → WBS-12.3 → WBS-12.4`.
 
 | Critical-path activity ID | Duration (weeks) | Reason it is critical |
 |---|---|---|
-| [WBS-x.x] | [Number] | [No available schedule slack / dependency explanation] |
-| [WBS-y.y] | [Number] | [No available schedule slack / dependency explanation] |
-| [WBS-z.z] | [Number] | [No available schedule slack / dependency explanation] |
+| WBS-4.1 | 1 | The first step of the speech pipeline. All transcription work depends on its output (TF = 0). |
+| WBS-5.1 | 2 | Diarization and masking need transcript segments (TF = 0). |
+| WBS-6.1 | 2 | Speaker alignment needs diarization output. No slack between 5.1 and 6.2 (TF = 0). |
+| WBS-6.2 | 1 | The speaker-attributed transcript is the input of orchestration, benchmarking and E2E tests (TF = 0). |
+| WBS-3.4 | 2 | Chains every stage. It cannot start before the pipeline is complete, and integration waits for it (TF = 0). |
+| WBS-6.3 *(parallel branch)* | 2 | Benchmarking needs the complete pipeline, and the default configuration must be fixed before integration (TF = 0). |
+| WBS-12.3 *(parallel branch)* | 2 | E2E tests need the speaker-attributed pipeline, and integration needs the E2E suite (TF = 0). |
+| WBS-12.4 | 1 | Final integration and demo preparation, which must finish by the code freeze (TF = 0). |
 
-**Total project schedule:** **[Number] weeks**, from **[YYYY-MM-DD]** to **[YYYY-MM-DD]**.
+**Total project schedule:** **9 weeks**, from **2026-10-26** to **2026-12-25** (code freeze; W9 has 5 working days). The demo follows on 2026-12-26 and the final presentation on 2026-12-28.
 
 **Critical-path explanation:**  
-[Explain how the critical path was identified from the PERT network and how it determines the overall project duration.]
+A forward pass gives the earliest start and finish of each activity (Section 5.1 table). The project finishes at the EF of WBS-12.4, which is 9 weeks. A backward pass from week 9 gives the latest times. The activities with zero total float (LS = ES) form the longest paths through the network. All of them share the speech pipeline segment (4.1 → 5.1 → 6.1 → 6.2) and end in system integration (12.4). The main path through end-to-end orchestration has a length of 1 + 2 + 2 + 1 + 2 + 1 = **9 weeks**, which sets the project duration. The two parallel branches through WBS-6.3 and WBS-12.3 have the same length. A delay in any zero-float activity directly delays the code freeze.
+
+The documentation chain (WBS-13.x) is not on the critical path. Its dates are set by fixed course deadlines, not by the flow of the network, and it does not drive the delivery of the software.
+
+After resource levelling, some non-critical activities have no float left: **WBS-3.3, 8.0, 8.2, 9.1, 9.2, 10.1, 10.2 and 12.2**. The PM monitors them as **near-critical** in the weekly board review.
 
 ### 5.3 Gantt Chart — Project Timeline
 
-Update the example dates, activity names, and durations below using Section 5.1. The values shown here are **illustrative only and are not actual project dates**.
-
 ```mermaid
 gantt
-    title [Project Title] — Replace All Example Dates and Durations
+    title Epilogos — Project Schedule
     dateFormat YYYY-MM-DD
     axisFormat %d %b
 
-    section [Phase / Workstream 1]
-    WBS-1.1 [Activity name] :w11, 2026-01-01, 1w
-    WBS-1.2 [Activity name] :w12, after w11, 1w
+    section Backend and UI (Yunus)
+    WBS-3.1 Monolith skeleton          :w31, 2026-10-26, 1w
+    WBS-11.1 UI templates              :w111, 2026-11-02, 1w
+    WBS-11.2 Sync playback             :w112, 2026-11-09, 3w
+    WBS-3.3 Progress API (0.2 FTE)     :w33, 2026-11-30, 1w
+    WBS-9.1 Review API (0.2 FTE)       :w91, 2026-11-30, 1w
+    WBS-3.4 E2E orchestration          :crit, w34, 2026-12-07, 2w
 
-    section [Phase / Workstream 2]
-    WBS-2.1 [Activity name] :w21, after w11, 2w
-    WBS-3.1 [Activity name] :w31, after w21, 1w
+    section Security and data (Abdul)
+    WBS-1.1 DB schema                  :w11, 2026-10-26, 2w
+    WBS-1.2 JWT and RBAC               :w12, 2026-11-09, 2w
+    WBS-7.1 PII masking                :w71, 2026-11-23, 1w
+    WBS-1.3 Credential storage         :w13, 2026-11-30, 1w
+    WBS-9.2 Review UI                  :w92, 2026-12-07, 2w
+
+    section Speech pipeline (Furkan)
+    WBS-4.1 FFmpeg preprocessing       :crit, w41, 2026-10-26, 1w
+    WBS-5.1 Transcription              :crit, w51, 2026-11-02, 2w
+    WBS-6.1 Diarization                :crit, w61, 2026-11-16, 2w
+    WBS-6.2 Speaker alignment          :crit, w62, 2026-11-30, 1w
+    WBS-6.3 Benchmarking and tuning    :crit, w63, 2026-12-07, 2w
+
+    section Inference and Jira (Ilke)
+    WBS-8.1 Schemas and prompts        :w81, 2026-10-26, 1w
+    WBS-8.0 Inference engine setup     :w80, 2026-11-02, 2w
+    WBS-8.2 LLM extraction             :w82, 2026-11-16, 2w
+    WBS-10.1 Jira connection           :w101, 2026-11-30, 1w
+    WBS-10.2 Jira export               :w102, 2026-12-07, 2w
+
+    section DevOps, APIs and QA (Enes)
+    WBS-12.1 Docker env and basic CI   :w121, 2026-10-26, 1w
+    WBS-2.1 Upload API                 :w21, 2026-11-02, 1w
+    WBS-3.2 Celery queues              :w32, 2026-11-09, 2w
+    WBS-12.2 CI/CD and cloud deploy    :w122, 2026-11-23, 2w
+    WBS-12.3 Test infra and E2E        :crit, w123, 2026-12-07, 2w
+
+    section Team-wide
+    WBS-12.4 Integration and demo (all) :crit, w124, 2026-12-21, 1w
+
+    section Documentation (all, 0.1 FTE)
+    WBS-13.1 Requirements Spec         :d131, 2026-11-02, 1w
+    WBS-13.2 Requirements Analysis     :d132, 2026-11-23, 1w
+    WBS-13.3 Design report             :d133, 2026-11-30, 2w
+    WBS-13.4 Test report               :d134, 2026-12-14, 1w
+    WBS-13.5 Docs and slides           :d135, 2026-12-21, 5d
+
+    section Milestones
+    Increment v0.1                     :milestone, i1, 2026-11-08, 0d
+    Requirements Spec due              :milestone, m1, 2026-11-08, 0d
+    Increment v0.2 (stub E2E chain)    :milestone, i2, 2026-11-22, 0d
+    BLG411E midterm                    :milestone, mt, 2026-11-23, 0d
+    Requirements Analysis due          :milestone, m2, 2026-11-29, 0d
+    Increment v0.3                     :milestone, i3, 2026-12-06, 0d
+    Design Spec due                    :milestone, m3, 2026-12-13, 0d
+    Increment v0.4 (feature complete)  :milestone, i4, 2026-12-20, 0d
+    Test Spec due                      :milestone, m4, 2026-12-21, 0d
+    Code freeze v1.0.0                 :milestone, m5, 2026-12-25, 0d
+    Demo                               :milestone, m6, 2026-12-26, 0d
+    Final presentation                 :milestone, m7, 2026-12-28, 0d
 ```
 
-**Schedule consistency check:**  
-[Verify that dates, durations, activity dependencies, effort estimates, and member availability agree across the WBS, estimates, resource map, PERT chart, and Gantt chart.]
+**Increment plan (working software at the end of each iteration):** each increment is tagged on main after its PRs are merged.
+
+| Increment | End of week | Running feature set |
+|---|---|---|
+| v0.1 | W2 (2026-11-08) | Monolith skeleton in Docker, basic CI, DB schema, login/meeting/upload templates, upload API, FFmpeg preprocessing, extraction schemas. A user can upload a file and see it stored. |
+| v0.2 | W4 (2026-11-22) | Celery queues with the full chain running end to end on stub stages, JWT/RBAC, faster-whisper and cloud transcription, inference engine in both modes. An upload produces a real transcript; later stages return stub output. |
+| v0.3 | W6 (2026-12-06) | Diarization and speaker alignment, PII masking, LLM extraction, synchronized player, progress and review APIs, Jira connection, cloud deployment at a live URL. |
+| v0.4 | W8 (2026-12-20) | Real stages replace all stubs, review page, Jira export, E2E suite and benchmarks. Feature complete for the integration week. |
+| v1.0.0 | W9 (2026-12-25) | Integrated, tested release on main at the code freeze; the demo runs from this release. |
+
+**Schedule consistency check:**
+- **WBS IDs:** every WBS activity in Section 2 appears with the same ID in Sections 3, 4.2, 5.1 and 5.3.
+- **Durations:** every Gantt duration equals the effort in Section 3 divided by the allocation in Section 4.2. For example, WBS-11.2 is 1.2 man-weeks at 0.4 FTE (3 weeks), and WBS-3.3 is 0.2 man-weeks at 0.2 FTE (1 week). WBS-12.4 represents 2.0 man-weeks across all 5 team members (2.0 FTE) and is drawn as one week (W9) like every other weekly activity. Its work ends with the `v1.0.0` release at the code freeze milestone on 2026-12-25; the bar covers the rest of the calendar week, including the demo.
+- **Dependencies:** every Gantt start is at or after the scheduled finish of all predecessors in the PERT network.
+- **Member load:** each member has exactly 0.4 FTE of development work in every week, 3.6 man-weeks each over W1–W9. Yunus works on 3.1 → 11.1 → 11.2 → 3.3 & 9.1 (0.2 FTE each) → 3.4 → 12.4, and Enes on 12.1 → 2.1 → 3.2 → 12.2 → 12.3 → 12.4.
+- **Totals:** the sum of all estimates (21.0 man-weeks) fits within the team capacity (22.5 man-weeks).
+- **Deadlines:** each documentation activity ends by its course deadline (Requirements Spec 11-08, Requirements Analysis 11-29, Design Spec 12-13, Test Spec 12-21). The critical path ends on the code freeze date (2026-12-25), one day before the demo.
 
 ---
 
