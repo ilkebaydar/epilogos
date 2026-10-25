@@ -145,15 +145,14 @@ Engineering teams make many technical decisions and assign many follow-up tasks 
 
 ### 1.4 Non-functional Issues
 
-Describe relevant quality attributes, including security, performance, and usability.
-
 | Quality attribute | Requirement / concern | How it will be assessed |
 |---|---|---|
-| Security | [Access control, data protection, etc.] | [Test or assessment] |
-| Performance | [Response time, throughput, etc.] | [Measurement or test] |
-| Usability | [Accessibility, ease of use, etc.] | [Evaluation method] |
-| Reliability | [Availability, error handling, etc., if relevant] | [Test or assessment] |
-| Other | [Additional non-functional issue] | [Test or assessment] |
+| Security & privacy | JWT access tokens with expiry. Passwords hashed with bcrypt. RBAC on every protected endpoint. Jira API tokens encrypted at rest and secrets kept in `.env`. **Zero-leakage PII masking:** transcripts are masked before any LLM call (local or cloud) and before Jira export. In local mode no meeting data leaves the host. | Security tests in `tests/security/` (expired or missing token → 401, wrong role → 403). A seeded-secret test set with a target of ≥ 95% masking recall. A test that inspects outgoing LLM payloads and fails on any unmasked seeded secret. PR review checklist item: no plain-text credentials. |
+| Performance | Non-processing API endpoints respond in < 500 ms (p95). Local GPU mode processes a 30-minute meeting in ≤ 30 minutes (≤ 1× real time). Concurrent uploads are queued without failures or VRAM overflow. | Timing measurements on sample recordings (in the Test Report). A queue test that submits several uploads at once and checks sequential completion without out-of-memory errors. |
+| AI quality | Transcription accuracy (WER) and diarization error (DER) are measured. Extracted items are 100% schema-valid and checked for hallucinated items. | **jiwer** (WER) and pyannote metrics (DER) on an AMI/ICSI subset. **DeepEval** metrics (e.g., faithfulness/hallucination) on AMI/QMSum/MeetingBank samples, with a free hosted model (Groq/OpenRouter) as the judge model to keep the budget at zero. Pydantic validation unit tests. |
+| Usability | Upload → review → export completes in a few clear steps. Clicking a transcript line seeks the player in < 1 s. Progress, queue position and error states are always visible. The layout is responsive on desktop and tablet screens. | A task-based walkthrough with at least 3 users outside the team. Lighthouse accessibility score ≥ 85. |
+| Reliability | Failed pipeline stages are retried (up to 3 attempts, with exponential backoff for cloud rate limits). Job state survives worker restarts. Jira export is idempotent. The client stops polling a stalled job after a timeout and shows an error. | Fault-injection tests with mocked Jira 5xx responses, LLM timeouts, HTTP 429 rate-limit responses and worker restarts. |
+| Maintainability & testability | Test-first development: each module ships with its own unit and edge-case tests. Modular code (API, pipeline, inference, integration layers). CI must pass before merge. Typed Python. Every PR is reviewed by at least one teammate, and nobody (including the AI tools) commits directly to main. | Backend coverage ≥ 70% reported by pytest-cov in CI. CI blocks merges when tests fail. Branch protection on main. PR review records on GitHub. |
 
 ---
 
@@ -231,23 +230,57 @@ Estimate effort for **each WBS activity** in **man-weeks (person-weeks)**. Keep 
 
 | Member | Student ID | Role(s) | Main responsibilities |
 |---|---|---|---|
-| [Member 1] | [ID] | [Role] | [Responsibilities] |
-| [Member 2] | [ID] | [Role] | [Responsibilities] |
-| [Member 3] | [ID] | [Role] | [Responsibilities] |
+| Furkan Kural | 150210056 | Product Owner; Audio Pipeline Developer | Tracks customer requests and acceptance criteria, triages `customer-requests` issues. Builds FFmpeg preprocessing, faster-whisper (local + cloud adapter), pyannote.audio and speaker alignment. Runs the AMI/ICSI benchmarks. Writes the audio unit and format edge-case tests. |
+| İlke Başak Baydar | 150140709 | Project Manager; AI / Integration Lead | Manages the backlog, GitHub Projects board and milestone schedule. Sets up the local and cloud inference engine (vLLM + Qwen 2.5 3B / Groq adapter). Builds the LLM extraction service (Pydantic, prompts) and the Jira Cloud integration. Writes the extraction and Jira unit tests (mocked). |
+| Muhammed Yunus Doğru | 150210092 | Technical Lead / Architect; Backend & UI Developer | Owns the architecture decisions and the PR review rules for the backend. Designs the server architecture and API contract. Builds the FastAPI monolith, the Jinja2 page/template integration (AI-assisted), the synchronized playback player, the review and progress APIs, and end-to-end pipeline chaining. Writes the API tests. |
+| Abdul Akhundzada | 150220926 | Security & Database Administrator | Designs the PostgreSQL schema (Alembic). Builds JWT authentication and RBAC, credential encryption, the PII masking engine and the review UI. Writes the security and auth tests. Acts as the second reviewer and backup of the critical-path speech pipeline. |
+| Mehmet Enes Tekgöz | 150210089 | QA & DevOps Lead | Defines the test-first conventions and checks test coverage in PR reviews. Builds the Docker Compose environment and basic CI, the upload API, the Celery/Redis queues and job orchestration, the Render/cloud deployment and the GitHub Actions CI/CD pipeline. Leads E2E test automation and test coordination. |
+| Claude Code, Cursor / Antigravity | — | AI-assisted development tools | Generate boilerplate, templates, test skeletons and report drafts. Have no FTE allocation, and all output is reviewed through PRs by the member who owns the activity. |
 
 ### 4.2 Member-to-Activity Assignment
 
-Map group members to their assigned **WBS activities**. Use additional rows when an activity has multiple assigned members.
-
 | WBS activity ID | Assigned member | Responsibility | Allocation to activity (FTE) |
 |---|---|---|---|
-| WBS-1.1 | [Member] | [Specific contribution] | [e.g., 1.0] |
-| WBS-1.2 | [Member] | [Specific contribution] | [e.g., 0.5] |
-| WBS-2.1 | [Member] | [Specific contribution] | [e.g., 1.0] |
-| WBS-3.1 | [Member] | [Specific contribution] | [e.g., 1.0] |
+| WBS-1.1 | Abdul Akhundzada | Schema design and migrations | 0.4 |
+| WBS-1.2 | Abdul Akhundzada | JWT authentication, RBAC and auth tests | 0.4 |
+| WBS-1.3 | Abdul Akhundzada | Credential encryption and secret management | 0.4 |
+| WBS-2.1 | Mehmet Enes Tekgöz | Upload endpoint, validation and tests | 0.4 |
+| WBS-3.1 | Muhammed Yunus Doğru | Monolith skeleton and API contract | 0.4 |
+| WBS-3.2 | Mehmet Enes Tekgöz | Celery/Redis queues, orchestration and stub chain | 0.4 |
+| WBS-3.3 | Muhammed Yunus Doğru | Progress and queue status endpoint | 0.2 |
+| WBS-3.4 | Muhammed Yunus Doğru | End-to-end pipeline chaining (both modes) | 0.4 |
+| WBS-4.1 | Furkan Kural | FFmpeg preprocessing and format tests | 0.4 |
+| WBS-5.1 | Furkan Kural | faster-whisper and cloud transcription adapter | 0.4 |
+| WBS-6.1 | Furkan Kural | pyannote integration | 0.4 |
+| WBS-6.2 | Furkan Kural | Segment–speaker alignment | 0.4 |
+| WBS-6.3 | Furkan Kural | AMI/ICSI benchmarking and tuning | 0.4 |
+| WBS-7.1 | Abdul Akhundzada | PII masking engine and test set | 0.4 |
+| WBS-8.0 | İlke Başak Baydar | vLLM/Qwen setup, VRAM budget, cloud adapter | 0.4 |
+| WBS-8.1 | İlke Başak Baydar | Schemas, prompts and validation tests | 0.4 |
+| WBS-8.2 | İlke Başak Baydar | LLM extraction service | 0.4 |
+| WBS-9.1 | Muhammed Yunus Doğru | Review/approval endpoints | 0.2 |
+| WBS-9.2 | Abdul Akhundzada | Review and export page | 0.4 |
+| WBS-10.1 | İlke Başak Baydar | Jira connection and field mapping | 0.4 |
+| WBS-10.2 | İlke Başak Baydar | Jira task/sub-task export and mocked tests | 0.4 |
+| WBS-11.1 | Muhammed Yunus Doğru | Auth, meeting list and upload templates | 0.4 |
+| WBS-11.2 | Muhammed Yunus Doğru | Synchronized player and transcript | 0.4 |
+| WBS-12.1 | Mehmet Enes Tekgöz | Docker Compose environment and basic CI | 0.4 |
+| WBS-12.2 | Mehmet Enes Tekgöz | CI/CD pipeline and Render deployment | 0.4 |
+| WBS-12.3 | Mehmet Enes Tekgöz | Test infrastructure, E2E tests, coordination | 0.4 |
+| WBS-12.4 | Muhammed Yunus Doğru | Backend integration and `v1.0.0` release | 0.4 |
+| WBS-12.4 | Furkan Kural | Pipeline fixes and demo recordings | 0.4 |
+| WBS-12.4 | İlke Başak Baydar | Inference/extraction/Jira fixes and demo script | 0.4 |
+| WBS-12.4 | Abdul Akhundzada | Security checks and data fixes | 0.4 |
+| WBS-12.4 | Mehmet Enes Tekgöz | UI fixes, final CI/CD and cloud deployment | 0.4 |
+| WBS-13.1 – 13.5 | All five members | Each member writes the report sections for their own area; the PM coordinates and a teammate reviews each section. | 0.1 each (0.5 total) |
 
-**Availability or allocation constraints:**  
-[State any part-time allocations, competing activities, holidays, or resource limits.]
+**Availability or allocation constraints:**
+- **Weekly load:** every member works 0.5 FTE in total, i.e., 0.4 FTE of development and 0.1 FTE of documentation. Every member has exactly 0.4 FTE of development work in every week from W1 to W9 (3.6 man-weeks each). In W6, Yunus works on two Tiny activities in parallel, WBS-3.3 and WBS-9.1, at 0.2 FTE each.
+- **Exam weeks (W3–W5):**
+  - The unused documentation capacity in W1, W3 and W4 (1.5 man-weeks) is used to absorb lost hours.
+  - Abdul's lane can be reordered without delaying any successor: WBS-1.2 has 3 weeks of float, so WBS-7.1 can move forward to W3 and WBS-1.2 to W4–W5 if exams hit W3. In the other lanes, slipped work is absorbed by the documentation buffer.
+- **Customer meetings:** turning requests into issues within 48 hours is handled by the PO and PM as part of their management roles, outside the development allocation.
+- **Reviews:** every PR is approved by a teammate other than its author. AI-generated code is always reviewed by the member who owns the activity.
 
 ---
 
