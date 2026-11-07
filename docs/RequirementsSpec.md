@@ -253,6 +253,7 @@ Target users are agile software teams and engineering managers (Charter §3).
 
 ### 5.2 Acceptance criteria (Gherkin)
 
+Scenario IDs (`SC-##`) are used as test names (`test_SC##_...`) so that every test traces back to a scenario and a requirement. Each feature below can be saved as a `.feature` file under `tests/`.
 ```gherkin
 Feature: Accounts and access control   # US-01, US-02
 ```
@@ -330,6 +331,25 @@ Feature: Masking of sensitive data   # US-06
 
 ```gherkin
 Feature: Extraction of action items and decisions   # US-07
+  @SC-16 @FR-22 @FR-23
+  Scenario: Items are extracted from a completed transcript
+    Given a masked transcript in which "Speaker 1" says "Mehmet will update the CI pipeline by Friday"
+    And the team agrees to "use PostgreSQL"
+    When the extraction stage completes
+    Then an action item with a title, an assignee, a description and a priority is listed
+    And a decision about "use PostgreSQL" is listed
+
+  @SC-48 @FR-22
+  Scenario: The priority is Medium when it cannot be determined
+    Given a masked transcript in which an action item is agreed without any sign of urgency
+    When the extraction stage completes
+    Then the action item has the priority "Medium"
+
+  @SC-17 @FR-24
+  Scenario: An item that fails schema validation is not presented
+    Given the LLM returns an item without a title
+    When the item is validated
+    Then the item is not presented as a valid action item
 ```
 
 ```gherkin
@@ -338,6 +358,70 @@ Feature: Review and approval   # US-08
 
 ```gherkin
 Feature: Jira integration   # US-09, US-10
+  @SC-21 @FR-29
+  Scenario: The Admin tests a wrong Jira connection
+    Given a logged-in Admin
+    When the Admin saves a Jira connection with an invalid API token and tests it
+    Then the test reports a failure with its reason
+
+  @SC-22 @FR-30
+  Scenario: The Jira API token is not stored in plain text
+    Given an Admin saved a Jira connection
+    When the stored connection data is inspected
+    Then the API token does not appear in plain text
+
+  @SC-23 @FR-31 @FR-34
+  Scenario: Only approved items are exported
+    Given a meeting with 2 approved, 1 pending and 1 rejected action item
+    When a Member exports the meeting to Jira
+    Then exactly 2 Jira issues are created
+    And the Jira issue key of each exported item is stored
+
+  @SC-24 @FR-33
+  Scenario: An unknown assignee leads to an unassigned issue
+    Given an approved item whose assignee "Speaker 3" matches no Jira user and for which no Jira user was chosen
+    When the item is exported
+    Then the Jira issue is created without an assignee
+
+  @SC-25 @FR-35
+  Scenario: Exporting again creates no duplicates
+    Given a meeting whose 2 approved items were already exported
+    When a Member exports the meeting again
+    Then no new Jira issues are created for those 2 items
+
+  @SC-26 @FR-36
+  Scenario: A failing export is reported
+    Given Jira answers every request with a server error
+    When a Member exports the meeting
+    Then the system retries the export
+    And the user is told which items were not exported
+
+  @SC-46 @FR-32
+  Scenario: An item without a parent becomes a Jira task
+    Given an approved action item with priority "High" and no parent
+    When the item is exported
+    Then a Jira task with priority "High" is created
+
+  @SC-47 @FR-32
+  Scenario: An item with a parent becomes a Jira sub-task
+    Given the Jira issue "EPI-12" exists
+    And an approved action item whose parent was set to "EPI-12" during review
+    When the item is exported
+    Then a Jira sub-task of "EPI-12" is created
+
+  @SC-41 @FR-33
+  Scenario: The assignee is chosen from the Jira project users
+    Given the target Jira project has a user "Furkan K."
+    When a Member searches "Fur" in the assignee list of an item and chooses "Furkan K."
+    And the Member approves and exports the item
+    Then the Jira issue is assigned to "Furkan K."
+
+  @SC-42 @FR-35
+  Scenario: An export that stopped after Jira created an issue creates no duplicate
+    Given Jira created an issue for an approved item but the system stopped before storing its key
+    When a Member exports the meeting again
+    Then no second Jira issue is created for that item
+    And the key of the existing issue is stored
 ```
 
 ```gherkin
@@ -355,6 +439,22 @@ Feature: Meeting access and data lifecycle   # US-12, US-13
 ### UC-01: Process a meeting recording
 
 ### UC-02: Review and export action items to Jira (critical)
+- **Primary actor:** Member (or Admin)
+- **Secondary actor:** Jira Cloud
+- **Pre-conditions:** The meeting's job is `completed`. An Admin has configured and tested the Jira connection (FR-29).
+- **Post-conditions:** Every approved action item exists as a Jira issue whose key is stored (FR-34). Decisions stay in Epilogos.
+- **Main success scenario:**
+  1. The user opens the review screen; action items and decisions are listed separately (FR-25).
+  2. The user edits items where needed, chooses the Jira assignee from the list of project users (FR-33), and approves or rejects each action item (FR-26, FR-27).
+  3. The user starts the export (FR-31).
+  4. For each approved item, the system creates a Jira task or sub-task (FR-32) with the chosen assignee (FR-33).
+  5. The system stores and shows the issue keys (FR-34).
+- **Extensions:**
+  - **1a.** The user is a Viewer: the items are read-only and export is not available (FR-05).
+  - **3a.** No Jira connection is configured: the export is refused and the user is told that an Admin must configure the Jira connection.
+  - **4a.** No Jira user was chosen for the item: the issue is created unassigned (FR-33).
+  - **4b.** Jira returns an error or rate limit: the system retries; items that still fail are reported (FR-36).
+  - **3b.** Some items were exported before, or an earlier export stopped half-way: they are not created again (FR-35).
 
 ### UC-03: Share a meeting and delete its recording
 
