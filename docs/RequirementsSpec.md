@@ -425,6 +425,440 @@ The table below gives a user story (`US-##`) for each user-facing WBS activity o
 | — | WBS-12.4 | No user story: system integration and demo preparation cover all requirements together. | — |
 | — | WBS-13.1 to WBS-13.5 | No user story: course reports and documentation are project deliverables (D-08), not system behavior. | — |
 
+### 3.3 Use Case Diagrams
+
+The diagrams use the UML use case notation in Mermaid. Actor names are the user types of Section 3.1 and use case names are those of Section 3.4.
+
+#### 3.3.1 Whole-System Use Case Diagram
+
+```mermaid
+flowchart LR
+    UT01["UT-01 Admin"]
+    UT02["UT-02 Member"]
+    UT03["UT-03 Viewer"]
+    UT04["UT-04 Jira Cloud"]
+    UT05["UT-05 Cloud speech-to-text and LLM services"]
+
+    subgraph System["Epilogos / system boundary"]
+        UC04(["UC-04: Register and log in"])
+        UC05(["UC-05: Manage user roles"])
+        UC01(["UC-01: Process a meeting recording"])
+        UC02(["UC-02: Review and export action items to Jira"])
+        UC06(["UC-06: Configure the Jira connection"])
+        UC07(["UC-07: Browse meetings, play back and rename speakers"])
+        UC03(["UC-03: Share a meeting and delete its recording"])
+    end
+
+    UT01 -.->|"can do everything a Member can"| UT02
+    UT01 --> UC05
+    UT01 --> UC06
+    UT02 --> UC04
+    UT03 --> UC04
+    UT02 --> UC01
+    UT02 --> UC02
+    UT02 --> UC07
+    UT03 --> UC07
+    UT02 --> UC03
+    UC01 --- UT05
+    UC02 --- UT04
+    UC06 --- UT04
+```
+
+**Whole-system diagram notes:**  
+The human actors are Admin, Member and Viewer; Admin can perform every Member use case in addition to UC-05 and UC-06. Processing a recording (UC-01) runs in the background after the upload and covers audio extraction, transcription, speaker labelling, masking and extraction. The external systems are secondary actors: Jira Cloud takes part in UC-02 and UC-06, and the cloud services take part in UC-01 only in cloud mode. Every planned user-facing feature (T-01 to T-11) is represented; T-12 and T-13 are not system features.
+
+#### 3.3.2 Functionality-Specific Use Case Diagram — Accounts and Access Control
+
+```mermaid
+flowchart LR
+    UT01["UT-01 Admin"]
+    UT02["UT-02 Member"]
+    UT03["UT-03 Viewer"]
+
+    subgraph System["Accounts and access control / system boundary"]
+        UC04(["UC-04: Register and log in"])
+        UC05(["UC-05: Manage user roles"])
+    end
+
+    UT01 --> UC04
+    UT02 --> UC04
+    UT03 --> UC04
+    UT01 --> UC05
+```
+
+**Functionality covered:** T-01 / FR-01 to FR-06 / UC-04, UC-05  
+**Diagram notes:** Every human user registers and logs in the same way and starts as a Member; only the Admin changes roles. The role checks of FR-05, FR-06 and FR-44 apply to every other use case.
+
+#### 3.3.3 Functionality-Specific Use Case Diagram — Recording Processing
+
+```mermaid
+flowchart LR
+    UT02["UT-02 Member"]
+    UT05["UT-05 Cloud speech-to-text and LLM services"]
+
+    subgraph System["Recording processing / system boundary"]
+        UC01(["UC-01: Process a meeting recording"])
+    end
+
+    UT02 --> UC01
+    UC01 --- UT05
+```
+
+**Functionality covered:** T-02 to T-08 / FR-07 to FR-18, FR-20 to FR-24 / UC-01  
+**Diagram notes:** The Member uploads a recording and follows its job. The stages run in a fixed order: audio extraction, transcription, speaker labelling in local mode, masking and extraction. Masking always runs before any text reaches an LLM. The cloud services are used only in cloud mode.
+
+#### 3.3.4 Functionality-Specific Use Case Diagram — Review and Jira Export
+
+```mermaid
+flowchart LR
+    UT01["UT-01 Admin"]
+    UT02["UT-02 Member"]
+    UT04["UT-04 Jira Cloud"]
+
+    subgraph System["Review and Jira export / system boundary"]
+        UC06(["UC-06: Configure the Jira connection"])
+        UC02(["UC-02: Review and export action items to Jira"])
+    end
+
+    UT01 --> UC06
+    UT02 --> UC02
+    UC06 --- UT04
+    UC02 --- UT04
+```
+
+**Functionality covered:** T-09, T-10 / FR-25 to FR-36 / UC-02, UC-06  
+**Diagram notes:** The Admin configures and tests the Jira connection once (UC-06); after that, Members review the extracted items and export the approved ones (UC-02).
+
+#### 3.3.5 Functionality-Specific Use Case Diagram — Meeting Dashboard and Playback
+
+```mermaid
+flowchart LR
+    UT02["UT-02 Member"]
+    UT03["UT-03 Viewer"]
+
+    subgraph System["Meeting dashboard and playback / system boundary"]
+        UC07(["UC-07: Browse meetings, play back and rename speakers"])
+    end
+
+    UT02 --> UC07
+    UT03 --> UC07
+```
+
+**Functionality covered:** T-11 / FR-19, FR-37 to FR-40 / UC-07  
+**Diagram notes:** Members and Viewers browse the meetings they can access and play recordings next to the transcript. Renaming speakers is available only to Members and Admins.
+
+#### 3.3.6 Functionality-Specific Use Case Diagram — Meeting Sharing and Data Lifecycle
+
+```mermaid
+flowchart LR
+    UT01["UT-01 Admin"]
+    UT02["UT-02 Member (owner)"]
+    UT03["UT-03 Viewer"]
+
+    subgraph System["Meeting sharing and data lifecycle / system boundary"]
+        UC03(["UC-03: Share a meeting and delete its recording"])
+        UC07(["UC-07: Browse meetings, play back and rename speakers"])
+    end
+
+    UT02 --> UC03
+    UT01 --> UC03
+    UT03 --> UC07
+```
+
+**Functionality covered:** T-01, T-02, T-11 / FR-41 to FR-44 / UC-03  
+**Diagram notes:** The owner shares a meeting and deletes its recording or the whole meeting; an Admin can do the same. A user with whom a meeting is shared reads it through UC-07.
+
+### 3.4 Use Cases
+
+Every planned feature of the Project Plan (T-01 to T-11) has at least one use case. One use case may cover several requirements when they form a single user goal.
+
+#### 3.4.1 Use Case Coverage Matrix
+
+| Project Plan task ID | Functional requirement ID(s) | Use case ID(s) | Scenario ID(s) |
+|---|---|---|---|
+| T-01 | FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-30, FR-41, FR-44 | UC-03, UC-04, UC-05, UC-06 | SC-01, SC-05 |
+| T-02 | FR-07, FR-08, FR-09, FR-42, FR-43 | UC-01, UC-03 | SC-02, SC-06 |
+| T-03 | FR-10, FR-11, FR-12, FR-13, FR-14 | UC-01 | SC-02 |
+| T-04 | FR-15 | UC-01 | SC-03 |
+| T-05 | FR-16 | UC-01 | SC-03 |
+| T-06 | FR-17, FR-18 | UC-01 | SC-03 |
+| T-07 | FR-20, FR-21 | UC-01, UC-02 | SC-03 |
+| T-08 | FR-22, FR-23, FR-24 | UC-01 | SC-04 |
+| T-09 | FR-25, FR-26, FR-27, FR-28 | UC-02 | SC-04 |
+| T-10 | FR-29, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36 | UC-02, UC-06 | SC-01, SC-04 |
+| T-11 | FR-19, FR-37, FR-38, FR-39, FR-40, FR-41 | UC-03, UC-07 | SC-03, SC-05 |
+| T-12 | — | — | — |
+| T-13 | — | — | — |
+
+T-12 (testing, CI/CD and deployment) and T-13 (project documentation) are not features of the system, so they have no use case.
+
+#### 3.4.2 UC-01 — Process a Meeting Recording
+
+| Field | Description |
+|---|---|
+| **Use case ID** | UC-01 |
+| **Use case name** | Process a meeting recording |
+| **Goal / Purpose** | The user turns a meeting recording into a masked transcript and extracted items without taking notes by hand. |
+| **Actor(s)** | UT-02 — Member (or UT-01 Admin); secondary actors: processing worker; UT-05 — cloud speech-to-text and LLM APIs (cloud mode only) |
+| **Related Project Plan task(s)** | T-02, T-03, T-04, T-05, T-06, T-07, T-08 |
+| **Related functional requirement(s)** | FR-07 to FR-18, FR-20 to FR-24 |
+
+**Pre-condition(s):**  
+The user is logged in with role Admin or Member.
+
+**Main success flow:**
+
+1. **Actor:** The user uploads a recording.
+2. **System:** The system checks format, size and duration (FR-08), creates the meeting and starts a job (FR-09, FR-10).
+3. **System:** The system shows the job status and, while queued, the queue position (FR-11).
+4. **System:** The worker extracts the audio (FR-15), transcribes it (FR-16) and, in local mode, assigns speaker labels (FR-17).
+5. **System:** The system masks sensitive data and stores the transcript (FR-20). No transcript text is sent to an LLM before this step (FR-21).
+6. **System:** The system extracts and validates action items and decisions (FR-22–FR-24).
+7. **System:** The job becomes `completed`.
+8. **Actor:** The user opens the meeting.
+
+**Alternative flows:**
+
+- **A1 — Another job is running (branches from step 3):**
+  1. Another job is running: the new job stays `queued` and shows its position (FR-12).
+  2. The flow continues at step 4 when the job's turn comes.
+- **A2 — Cloud mode (branches from step 4):**
+  1. The audio is transcribed by the cloud speech-to-text API and no speaker labels are assigned (FR-18).
+  2. The flow continues at step 5.
+
+**Exception / error flows (if applicable):**
+
+- **E1 — The file breaks a rule (occurs at step 2):** The upload is rejected and the reason is shown (FR-08). The use case ends.
+- **E2 — A stage fails (occurs at steps 4–6):** It is retried up to 3 times. If it still fails, the job becomes `failed` with the stage name (FR-13). The user may re-submit the job (FR-14).
+
+**Post-condition(s):**  
+The meeting has a masked transcript and extracted items in `pending` state, or the job is `failed` with a stage-specific error.
+
+#### 3.4.3 UC-02 — Review and Export Action Items to Jira (critical)
+
+| Field | Description |
+|---|---|
+| **Use case ID** | UC-02 |
+| **Use case name** | Review and export action items to Jira |
+| **Goal / Purpose** | Only correct action items reach the team's Jira backlog, in one action and without retyping. |
+| **Actor(s)** | UT-02 — Member (or UT-01 Admin); secondary actor: UT-04 — Jira Cloud |
+| **Related Project Plan task(s)** | T-09, T-10 |
+| **Related functional requirement(s)** | FR-05, FR-21, FR-25 to FR-28, FR-31 to FR-36 |
+
+**Pre-condition(s):**  
+The meeting's job is `completed`. An Admin has configured and tested the Jira connection (FR-29).
+
+**Main success flow:**
+
+1. **Actor:** The user opens the review screen.
+2. **System:** Action items and decisions are listed separately (FR-25).
+3. **Actor:** The user edits items where needed, chooses the Jira assignee from the list of project users (FR-33), and approves or rejects each action item (FR-26, FR-27).
+4. **Actor:** The user starts the export (FR-31).
+5. **System:** For each approved item, the system creates a Jira task or sub-task (FR-32) with the chosen assignee (FR-33).
+6. **System:** The system stores and shows the issue keys (FR-34).
+
+**Alternative flows:**
+
+- **A1 — No Jira user chosen (branches from step 5):**
+  1. No Jira user was chosen for the item: the issue is created unassigned (FR-33).
+  2. The flow continues at step 6.
+- **A2 — Items exported before (branches from step 5):**
+  1. Some items were exported before, or an earlier export stopped half-way: they are not created again (FR-35).
+  2. The flow continues with the remaining items.
+
+**Exception / error flows (if applicable):**
+
+- **E1 — The user is a Viewer (occurs at step 1):** The items are read-only and export is not available (FR-05).
+- **E2 — No Jira connection is configured (occurs at step 4):** The export is refused and the user is told that an Admin must configure the Jira connection.
+- **E3 — Jira returns an error or rate limit (occurs at step 5):** The system retries; items that still fail are reported (FR-36).
+
+**Post-condition(s):**  
+Every approved action item exists as a Jira issue whose key is stored (FR-34). Decisions stay in Epilogos (FR-28).
+
+#### 3.4.4 UC-03 — Share a Meeting and Delete Its Recording
+
+| Field | Description |
+|---|---|
+| **Use case ID** | UC-03 |
+| **Use case name** | Share a meeting and delete its recording |
+| **Goal / Purpose** | The owner lets chosen users read a meeting and removes the recording when it is no longer needed. |
+| **Actor(s)** | UT-02 — Member who owns the meeting (or UT-01 Admin) |
+| **Related Project Plan task(s)** | T-01, T-02, T-11 |
+| **Related functional requirement(s)** | FR-05, FR-37, FR-38, FR-41, FR-42, FR-43, FR-44 |
+
+**Pre-condition(s):**  
+The meeting's job is `completed`.
+
+**Main success flow:**
+
+1. **Actor:** The owner shares the meeting with chosen users (FR-41).
+2. **Actor:** The users read the meeting as far as their role permits (FR-37, FR-05).
+3. **Actor:** The owner exports the approved items (UC-02).
+4. **Actor:** The owner deletes the recording (FR-42).
+5. **System:** The system deletes the recording and any extracted audio (NFR-20); the transcript stays readable (FR-38).
+
+**Alternative flows:**
+
+- **A1 — The whole meeting is deleted (branches from step 4):**
+  1. The owner deletes the whole meeting instead: all its data is removed (FR-43).
+  2. The use case ends.
+
+**Exception / error flows (if applicable):**
+
+- **E1 — A user without access requests the meeting (occurs at step 2):** The system answers as if it did not exist (FR-44).
+
+**Post-condition(s):**  
+The chosen users can read the meeting. After deletion the recording and any extracted audio no longer exist; the transcript, items, decisions and Jira issue keys remain.
+
+#### 3.4.5 UC-04 — Register and Log In
+
+| Field | Description |
+|---|---|
+| **Use case ID** | UC-04 |
+| **Use case name** | Register and log in |
+| **Goal / Purpose** | A person gets an account and access to Epilogos, so that every upload and review is tied to a user. |
+| **Actor(s)** | UT-02 — Member (also UT-01 Admin and UT-03 Viewer for login) |
+| **Related Project Plan task(s)** | T-01 |
+| **Related functional requirement(s)** | FR-01, FR-02, FR-06 |
+
+**Pre-condition(s):**  
+The system is set up and reachable. For registration, no account exists for the e-mail address.
+
+**Main success flow:**
+
+1. **Actor:** Opens the registration page and enters an e-mail address and a password.
+2. **System:** Checks that the password has at least 8 characters (NFR-17).
+3. **System:** Creates the account with the role Member (FR-01).
+4. **Actor:** Logs in with the e-mail address and the password.
+5. **System:** Verifies the credentials and issues an access token that expires after 30 minutes and a refresh token that is valid for 7 days (FR-02).
+
+**Alternative flows:**
+
+- **A1 — Existing user logs in (branches from step 1):**
+  1. The person already has an account and logs in.
+  2. The flow continues at step 4.
+- **A2 — Access token expired (branches after step 5):**
+  1. The access token expires while the refresh token is still valid.
+  2. The system issues a new access token without a new login (FR-02).
+
+**Exception / error flows (if applicable):**
+
+- **E1 — Password too short (occurs at step 2):** The registration is refused and no account is created (NFR-17).
+- **E2 — Wrong password (occurs at step 5):** No access token is issued (FR-01).
+- **E3 — No valid token (occurs after step 5):** Every request is answered with *401 Unauthorized* (FR-06).
+
+**Post-condition(s):**  
+The user has an account with exactly one role (Member after registration) and a valid access token.
+
+#### 3.4.6 UC-05 — Manage User Roles
+
+| Field | Description |
+|---|---|
+| **Use case ID** | UC-05 |
+| **Use case name** | Manage user roles |
+| **Goal / Purpose** | The Admin gives each user the right role, so that only the right people can change items, export or configure Jira. |
+| **Actor(s)** | UT-01 — Admin |
+| **Related Project Plan task(s)** | T-01 |
+| **Related functional requirement(s)** | FR-03, FR-05, FR-06 |
+
+**Pre-condition(s):**  
+The Admin is logged in. The user whose role is changed has registered.
+
+**Main success flow:**
+
+1. **Actor:** Selects a user.
+2. **Actor:** Chooses a new role: Admin, Member or Viewer.
+3. **System:** Checks that the requester is an Admin and stores the new role (FR-03).
+4. **System:** Checks the user's next requests against the new role.
+
+**Alternative flows:**
+
+- **A1 — User made a Viewer (branches from step 2):**
+  1. The Admin chooses the role Viewer.
+  2. After step 4 the user can no longer edit, approve, reject or export items or rename speakers (FR-05).
+
+**Exception / error flows (if applicable):**
+
+- **E1 — The requester is not an Admin (occurs at step 3):** The system answers *403 Forbidden* and the role stays unchanged (FR-06).
+
+**Post-condition(s):**  
+The user has exactly one role.
+
+#### 3.4.7 UC-06 — Configure the Jira Connection
+
+| Field | Description |
+|---|---|
+| **Use case ID** | UC-06 |
+| **Use case name** | Configure the Jira connection |
+| **Goal / Purpose** | Export problems are found before the first export, and the Jira credentials are stored safely. |
+| **Actor(s)** | UT-01 — Admin; secondary actor: UT-04 — Jira Cloud |
+| **Related Project Plan task(s)** | T-10, T-01 |
+| **Related functional requirement(s)** | FR-04, FR-29, FR-30 |
+
+**Pre-condition(s):**  
+The Admin is logged in.
+
+**Main success flow:**
+
+1. **Actor:** Enters the Jira Cloud site, the account, the API token, the target project and the issue type.
+2. **System:** Stores the connection; the API token is stored encrypted (FR-30).
+3. **Actor:** Starts the connection test.
+4. **System:** Tests the connection with Jira Cloud and reports success (FR-29).
+
+**Alternative flows:**
+
+- **A1 — Existing connection changed (branches from step 1):**
+  1. A connection already exists and the Admin changes it (FR-04).
+  2. The flow continues at step 2.
+
+**Exception / error flows (if applicable):**
+
+- **E1 — The test fails (occurs at step 4):** The test reports the reason for failure (FR-29); the Admin corrects the settings and repeats from step 1.
+- **E2 — The requester is not an Admin (occurs at step 1):** The request is answered with *403 Forbidden* (FR-04, FR-06).
+
+**Post-condition(s):**  
+A tested Jira connection exists, and its API token is not stored in plain text.
+
+#### 3.4.8 UC-07 — Browse Meetings, Play Back a Recording and Rename Speakers
+
+| Field | Description |
+|---|---|
+| **Use case ID** | UC-07 |
+| **Use case name** | Browse meetings, play back a recording and rename speakers |
+| **Goal / Purpose** | The user finds a meeting and checks what was actually said, and by whom. |
+| **Actor(s)** | UT-02 — Member; UT-03 — Viewer (also UT-01 Admin) |
+| **Related Project Plan task(s)** | T-11 |
+| **Related functional requirement(s)** | FR-05, FR-19, FR-37, FR-38, FR-39, FR-40, FR-44 |
+
+**Pre-condition(s):**  
+The user is logged in and owns, or has been shared, at least one meeting (an Admin sees all meetings).
+
+**Main success flow:**
+
+1. **Actor:** Opens the meeting list.
+2. **System:** Lists the meetings the user can access with their upload date and processing status (FR-37).
+3. **Actor:** Opens a completed meeting.
+4. **System:** Plays the recording next to the transcript (FR-38).
+5. **Actor:** Selects a transcript segment.
+6. **System:** Moves playback to the start time of the segment (FR-39) and highlights the segment being played (FR-40).
+
+**Alternative flows:**
+
+- **A1 — Recording deleted (branches from step 4):**
+  1. The recording of the meeting was deleted (UC-03).
+  2. The transcript stays readable and the system tells the user that playback is no longer available (FR-38); steps 5 and 6 do not apply.
+- **A2 — Speaker renamed (branches after step 4):**
+  1. A Member or Admin renames a speaker label.
+  2. The new name applies to every segment with that label in the same meeting (FR-19).
+
+**Exception / error flows (if applicable):**
+
+- **E1 — Meeting not accessible (occurs at step 3):** A request for a meeting the user neither owns nor has been shared is answered with *404 Not Found* (FR-44).
+- **E2 — A Viewer tries to rename a speaker (occurs in A2):** The change is refused (FR-05).
+
+**Post-condition(s):**  
+The user has read the transcript and, if the recording exists, listened to the selected part.
+
 ---
 
 ## Appendix A. Acceptance Criteria (Gherkin)
@@ -817,61 +1251,6 @@ Feature: Meeting access and data lifecycle   # US-12, US-13
     Then the recording, transcript, items and decisions are removed
     And the Jira issues that were already created are not changed
 ```
-
----
-
-## 6. Use Cases
-
-### UC-01: Process a meeting recording
-
-- **Primary actor:** Member (or Admin)
-- **Secondary actors:** Processing worker; cloud speech-to-text and LLM APIs (cloud mode only)
-- **Pre-conditions:** The user is logged in with role Admin or Member.
-- **Post-conditions:** The meeting has a masked transcript and extracted items in `pending` state, or the job is `failed` with a stage-specific error.
-- **Main success scenario:**
-  1. The user uploads a recording.
-  2. The system checks format, size and duration (FR-08), creates the meeting and starts a job (FR-09, FR-10).
-  3. The system shows the job status and, while queued, the queue position (FR-11).
-  4. The worker extracts the audio (FR-15), transcribes it (FR-16) and, in local mode, assigns speaker labels (FR-17).
-  5. The system masks sensitive data and stores the transcript (FR-20).
-  6. The system extracts and validates action items and decisions (FR-22–FR-24).
-  7. The job becomes `completed`; the user opens the meeting.
-- **Extensions:**
-  - **2a.** The file breaks a rule: the upload is rejected and the reason is shown (FR-08). The use case ends.
-  - **3a.** Another job is running: the new job stays `queued` and shows its position (FR-12).
-  - **4a–6a.** A stage fails: it is retried up to 3 times. If it still fails, the job becomes `failed` with the stage name (FR-13). The user may re-submit the job (FR-14).
-
-### UC-02: Review and export action items to Jira (critical)
-- **Primary actor:** Member (or Admin)
-- **Secondary actor:** Jira Cloud
-- **Pre-conditions:** The meeting's job is `completed`. An Admin has configured and tested the Jira connection (FR-29).
-- **Post-conditions:** Every approved action item exists as a Jira issue whose key is stored (FR-34). Decisions stay in Epilogos.
-- **Main success scenario:**
-  1. The user opens the review screen; action items and decisions are listed separately (FR-25).
-  2. The user edits items where needed, chooses the Jira assignee from the list of project users (FR-33), and approves or rejects each action item (FR-26, FR-27).
-  3. The user starts the export (FR-31).
-  4. For each approved item, the system creates a Jira task or sub-task (FR-32) with the chosen assignee (FR-33).
-  5. The system stores and shows the issue keys (FR-34).
-- **Extensions:**
-  - **1a.** The user is a Viewer: the items are read-only and export is not available (FR-05).
-  - **3a.** No Jira connection is configured: the export is refused and the user is told that an Admin must configure the Jira connection.
-  - **4a.** No Jira user was chosen for the item: the issue is created unassigned (FR-33).
-  - **4b.** Jira returns an error or rate limit: the system retries; items that still fail are reported (FR-36).
-  - **3b.** Some items were exported before, or an earlier export stopped half-way: they are not created again (FR-35).
-
-### UC-03: Share a meeting and delete its recording
-- **Primary actor:** Member who owns the meeting (or Admin)
-- **Pre-conditions:** The meeting's job is `completed`.
-- **Post-conditions:** The chosen users can read the meeting. After deletion the recording and any extracted audio no longer exist; the transcript, items, decisions and Jira issue keys remain.
-- **Main success scenario:**
-  1. The owner shares the meeting with chosen users (FR-41).
-  2. The users read the meeting as far as their role permits (FR-37, FR-05).
-  3. The owner exports the approved items (UC-02).
-  4. The owner deletes the recording (FR-42).
-  5. The system deletes the recording and any extracted audio (NFR-20); the transcript stays readable (FR-38).
-- **Extensions:**
-  - **2a.** A user without access requests the meeting: the system answers as if it did not exist (FR-44).
-  - **4a.** The owner deletes the whole meeting instead: all its data is removed (FR-43).
 
 ---
 
