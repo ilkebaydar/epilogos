@@ -407,6 +407,39 @@ Feature: Extraction of action items and decisions   # US-07
 
 ```gherkin
 Feature: Review and approval   # US-08
+
+  @SC-18 @FR-25 @FR-28
+  Scenario: Decisions are listed separately and are not exportable
+    Given a completed meeting with action items and decisions
+    When a Member opens the review screen
+    Then the action items and the decisions are shown in separate lists
+    And decisions cannot be selected for export
+
+  @SC-19 @FR-26 @FR-27
+  Scenario: A Member edits and approves an item
+    Given a pending action item with assignee "Speaker 2"
+    When a Member changes the assignee to "Furkan" and approves the item
+    Then the item is "approved" with assignee "Furkan"
+    And the state is still "approved" after the page is reloaded
+
+  @SC-20 @FR-26 @FR-27
+  Scenario: A Member rejects an item
+    Given a pending action item
+    When a Member rejects the item
+    Then the item is "rejected"
+
+  @SC-51 @FR-27
+  Scenario: An exported item cannot be edited
+    Given an action item in state "exported"
+    When a Member tries to change its title
+    Then the change is refused
+    And the item stays "exported"
+
+  @SC-52 @FR-27
+  Scenario: Editing an approved item requires a new approval
+    Given an action item in state "approved"
+    When a Member changes its description
+    Then the item is "pending" again
 ```
 
 ```gherkin
@@ -479,6 +512,24 @@ Feature: Jira integration   # US-09, US-10
 
 ```gherkin
 Feature: Meeting dashboard and synchronized playback   # US-11
+
+  @SC-27 @FR-37
+  Scenario: The meeting list shows status
+    Given a Member with one completed and one queued meeting
+    When the Member opens the meeting list
+    Then both meetings are listed with upload date and status
+
+  @SC-28 @FR-38 @FR-39
+  Scenario: Selecting a segment moves playback
+    Given a completed meeting is open with its recording and transcript
+    When the Member selects the segment that starts at 12:40
+    Then playback continues from 12:40
+
+  @SC-29 @FR-40
+  Scenario: The current segment is highlighted
+    Given a completed meeting is playing
+    When playback reaches a segment
+    Then that segment is highlighted in the transcript
 ```
 
 ```gherkin
@@ -490,6 +541,23 @@ Feature: Meeting access and data lifecycle   # US-12, US-13
 ## 6. Use Cases
 
 ### UC-01: Process a meeting recording
+
+- **Primary actor:** Member (or Admin)
+- **Secondary actors:** Processing worker; cloud speech-to-text and LLM APIs (cloud mode only)
+- **Pre-conditions:** The user is logged in with role Admin or Member.
+- **Post-conditions:** The meeting has a masked transcript and extracted items in `pending` state, or the job is `failed` with a stage-specific error.
+- **Main success scenario:**
+  1. The user uploads a recording.
+  2. The system checks format, size and duration (FR-08), creates the meeting and starts a job (FR-09, FR-10).
+  3. The system shows the job status and, while queued, the queue position (FR-11).
+  4. The worker extracts the audio (FR-15), transcribes it (FR-16) and, in local mode, assigns speaker labels (FR-17).
+  5. The system masks sensitive data and stores the transcript (FR-20).
+  6. The system extracts and validates action items and decisions (FR-22–FR-24).
+  7. The job becomes `completed`; the user opens the meeting.
+- **Extensions:**
+  - **2a.** The file breaks a rule: the upload is rejected and the reason is shown (FR-08). The use case ends.
+  - **3a.** Another job is running: the new job stays `queued` and shows its position (FR-12).
+  - **4a–6a.** A stage fails: it is retried up to 3 times. If it still fails, the job becomes `failed` with the stage name (FR-13). The user may re-submit the job (FR-14).
 
 ### UC-02: Review and export action items to Jira (critical)
 - **Primary actor:** Member (or Admin)
