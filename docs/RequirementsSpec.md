@@ -251,30 +251,10 @@ Each requirement is linked to the matching task(s) and deliverable(s) of the Pro
 
 ### 2.2 Non-functional Requirements
 
-| ID | Quality attribute | Requirement | Source | How it is verified |
-|---|---|---|---|---|
-| NFR-01 | Security | Passwords **shall** be stored only as salted one-way hashes. | Plan §1.4 | Security test reads the stored record. |
-| NFR-02 | Security | Credentials and secrets **shall not** appear in plain text in the database, the logs or the repository. | Plan WBS-1.3 | Review checklist and a test that scans stored data and logs. |
-| NFR-03 | Privacy | Masking (FR-20) **shall** reach at least 90% recall on the team's seeded-secret test set of standard-format values (e-mail addresses, API keys, access tokens, passwords in a recognizable form). Precision (the share of masked items that were really sensitive) **shall** be measured and reported on the same set, without a target value. | Plan §1.4, WBS-7.1, E-15 | Automated test in CI; precision is reported in the Test Report. 90% leaves a margin for speech-to-text output that splits or changes a value. |
-| NFR-04 | Privacy | No request **shall** be sent to an LLM for a transcript before the masking of that transcript has completed, and no value that masking detected **shall** appear in the request. | Plan §1.4, T-07 | Test that checks the stage order and inspects outgoing payloads. |
-| NFR-05 | Privacy | In local mode, no meeting data **shall** leave the host machine. Depends on E-08. | Plan §1.4 | Network-isolation check during a local run. |
-| NFR-06 | Performance | API requests that do not start processing **shall** respond in under 500 ms for 95% of requests. | Plan §1.4 | Simple load test of the main endpoints. |
-| NFR-07 | Performance | In local mode on the target GPU, a 30-minute meeting **shall** be processed in at most 30 minutes. | Plan §1.4 | Timing on sample recordings (Test Report). |
-| NFR-08 | Performance | Several simultaneous uploads **shall** complete one after another without out-of-memory errors. | Plan §1.4 | Queue test with several uploads. |
-| NFR-09 | Usability | After a transcript segment is selected, playback **shall** move to it within 1 second. | Plan §1.4 | Timed UI test. |
-| NFR-10 | Usability | At least 2 of 3 users outside the team **shall** complete the upload → review → export flow with a prepared sample recording, without help and within 10 minutes (processing time excluded). | Plan §1.4, E-12 | Task-based walkthrough with 3 external users; every point where a user gets stuck is recorded in the Test Report. |
-| NFR-11 | Accessibility | The main pages **shall** reach a Lighthouse accessibility score of at least 85. | Plan §1.4 | Lighthouse report. |
-| NFR-12 | Compatibility | The web interface **shall** work on current Chrome and Firefox, and **shall** be usable on desktop and tablet screens. | Plan D-05, §1.4 | Manual check on both browsers and screen sizes. |
-| NFR-13 | Reliability | A job's state **shall** survive a restart of the processing worker. | Plan §1.4 | Fault-injection test (worker restart). |
-| NFR-14 | AI quality | With the default configuration fixed in WBS-6.3, on the AMI headset-mix subset, the word error rate (WER) **shall** be at most 25% and the diarization error rate (DER) at most 30%. | Plan §1.4, D-02, E-07 | Benchmark run (WBS-6.3), reported in the Test Report together with the model and settings used. |
-| NFR-15 | AI quality | On benchmark samples (AMI, QMSum, MeetingBank), the DeepEval faithfulness score of the extracted items **shall** be at least 0.80. | Plan §1.4, D-03, E-07 | DeepEval run, reported in the Test Report together with the judge model used. |
-| NFR-16 | Maintainability | Backend line coverage **shall** be at least 70%, and a change **shall** be merged only if CI passes. | Plan §1.4 | Coverage report in CI; branch protection. |
-| NFR-17 | Security | The system **shall** reject passwords shorter than 8 characters. No other composition rules are applied. | E-17 (NIST SP 800-63B minimum) | Registration test with a 7-character password. |
-| NFR-18 | Security | Every function that returns or changes meeting data **shall** check ownership or sharing (FR-37, FR-41) and the role (FR-05). A user **shall not** reach another user's meeting by changing an identifier in a request. | Plan D-06, E-06 | Automated tests in `tests/security/`: for every such endpoint, user A requests the data of user B. |
-| NFR-19 | Security | An instruction written inside a transcript (e.g., "ignore previous instructions and ...") **shall not** change what is extracted or cause text to be sent anywhere. Extracted items **shall** still pass FR-24. | Plan T-08 | Test with a transcript that contains such instructions. |
-| NFR-20 | Privacy | After a recording is deleted (FR-42, FR-43), the media file and any audio extracted from it **shall** no longer exist in storage. | E-14 | Test that inspects storage after deletion. |
+Each quality attribute below is measurable, or is measured and reported where no target value was set.
 
----|---|---|---|---|
+| Requirement ID | Quality attribute | Non-functional requirement (natural language) | Applies to | Verification / measurement |
+|---|---|---|---|---|
 | NFR-01 | Security | Passwords **shall** be stored only as salted one-way hashes. | Whole system (accounts, FR-01) | Security test reads the stored record. |
 | NFR-02 | Security | Credentials and secrets **shall not** appear in plain text in the database, the logs or the repository. | Whole system | Review checklist and a test that scans stored data and logs. |
 | NFR-03 | Privacy | Masking (FR-20) **shall** reach at least 90% recall on the team's seeded-secret test set of standard-format values (e-mail addresses, API keys, access tokens, passwords in a recognizable form). Precision (the share of masked items that were really sensitive) **shall** be measured and reported on the same set, without a target value. | FR-20 | Automated test in CI; precision is reported in the Test Report. 90% leaves a margin for speech-to-text output that splits or changes a value. |
@@ -329,6 +309,65 @@ Each requirement is linked to the matching task(s) and deliverable(s) of the Pro
 
 ## 3. Use Cases
 
+### 3.1 User Types
+
+| User type ID | User type / actor | Description and responsibilities | Goals / typical actions | Related requirement ID(s) |
+|---|---|---|---|---|
+| UT-01 | Admin | The user who administers Epilogos for the team. Can do everything a Member can, sees all meetings, and is the only role that manages roles and the Jira connection. | Configure and test the Jira connection, change user roles, oversee all meetings, delete recordings or meetings of any owner. | FR-03, FR-04, FR-29, FR-30, FR-37, FR-42, FR-43 |
+| UT-02 | Member | A member of an agile software team who uploads meeting recordings and turns them into backlog items. Every newly registered user is a Member. | Upload recordings, follow processing, read transcripts, rename speakers, review and approve items, export them to Jira, share and delete own meetings. | FR-01, FR-02, FR-07 to FR-14, FR-19, FR-25 to FR-28, FR-31 to FR-41, FR-42, FR-43 |
+| UT-03 | Viewer | A user who follows the results of the meetings shared with them without changing them. | Read the meetings shared with them: transcript, decisions and action items, and play the recording. | FR-01, FR-02, FR-05, FR-37 to FR-41, FR-44 |
+| UT-04 | Jira Cloud (external system) | The team's Atlassian Jira Cloud site, reached through its REST API. | Provide the users of the target project, receive exported issues and return their keys. | FR-29, FR-31 to FR-36 |
+| UT-05 | Cloud speech-to-text and LLM services (external system) | Free, OpenAI-compatible cloud APIs, used only in cloud mode. | Transcribe audio and extract items from masked transcript text. | FR-16, FR-18, FR-21, FR-22 to FR-24 |
+
+**Access or role distinctions:**  
+Every newly registered user is a Member; the first Admin is created during system setup, and only an Admin can change a role (FR-01, FR-03). Members and Admins can upload, review, edit, approve, reject, export and rename speakers; a Viewer cannot do any of these (FR-05, FR-07). A Member or Viewer sees only the meetings they own and the meetings shared with them; an Admin sees all meetings (FR-37, FR-41). A meeting that is neither owned nor shared is answered with *404 Not Found*, so its existence is not revealed (FR-44). Requests without a valid token are rejected with *401*, and requests that the role does not permit with *403* (FR-06). The external systems UT-04 and UT-05 only answer requests of Epilogos. In cloud mode the cloud speech-to-text service receives the audio of the recording, and the LLM service receives only masked transcript text (FR-21).
+
+### 3.2 User Scenarios
+
+The scenarios below use three personas, one for each human user type. The target users of Epilogos are agile software teams and engineering managers (Project Charter).
+
+| Persona ID | Persona | User type | Background |
+|---|---|---|---|
+| P-01 | Engineering manager | UT-01 Admin | Manages an agile software team and its Jira project, and sets Epilogos up for the team. |
+| P-02 | Software developer | UT-02 Member | Member of the team who uploads the recordings of sprint plannings and technical meetings and turns their outcomes into Jira items. |
+| P-03 | Stakeholder | UT-03 Viewer | Follows the decisions and action items of the meetings shared with them without changing them. |
+
+**SC-01 — Setting up the team workspace**  
+**Persona:** P-01 — Engineering manager  
+**Related requirements:** FR-01, FR-02, FR-03, FR-04, FR-06, FR-29, FR-30
+
+The engineering manager logs in with the Admin account that was created during system setup. The members of the team register with their e-mail addresses and passwords, and each of them gets the role Member. A stakeholder who should only read meetings also registers, and the manager changes this user's role to Viewer. The manager then enters the Jira Cloud site, the account, the API token, the target project and the issue type, and tests the connection. The test with an invalid API token reports a failure and its reason. After the manager enters a valid token, the test succeeds and the token is stored encrypted. The scenario ends with a tested Jira connection and the right role for every user.
+
+**SC-02 — Uploading a sprint planning recording**  
+**Persona:** P-02 — Software developer  
+**Related requirements:** FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, FR-14
+
+After a sprint planning, the developer wants its outcomes in Jira without taking notes by hand. A PDF file selected by mistake is rejected, and the message names the format rule. The developer uploads the 20-minute MP4 recording of 300 MB with the title "Sprint 12 planning". The system creates the meeting and starts a processing job. Because another job is being processed, the new job is `queued` and its queue position is shown. The developer leaves the page; when they come back, the job is `completed`. If a stage keeps failing, the job becomes `failed`, the message names the stage, and the developer re-submits the job without uploading the file again.
+
+**SC-03 — Reading the transcript of a meeting**  
+**Persona:** P-02 — Software developer  
+**Related requirements:** FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-37, FR-38, FR-39, FR-40
+
+The developer opens the completed meeting from the meeting list. The transcript is shown as time-stamped segments with speaker labels such as "Speaker 1" and "Speaker 2". The developer renames "Speaker 1" to the name of the colleague, and every segment of that speaker in this meeting shows the new name. An e-mail address and an API key that were spoken in the meeting do not appear in the transcript, because they were masked before it was stored. The developer selects the segment that starts at 12:40; playback continues from 12:40, and the segment being played is highlighted.
+
+**SC-04 — Reviewing and exporting action items**  
+**Persona:** P-02 — Software developer  
+**Related requirements:** FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36
+
+On the review screen, the action items and the decisions are shown in separate lists. One action item has the assignee "Speaker 2"; the developer searches "Fur" in the assignee list and chooses the Jira user "Furkan K.". For another item, the developer sets the existing Jira issue "EPI-12" as the parent. The developer rejects an item that is not correct and approves the others. The developer then exports the meeting. Each approved item is created in Jira as a task, or as a sub-task of "EPI-12", and its issue key is shown next to the item; the decisions stay in Epilogos. When Jira returns errors, the system retries and tells the developer which items were not exported. Exporting the meeting again creates no duplicate issues.
+
+**SC-05 — Following the outcome as a stakeholder**  
+**Persona:** P-03 — Stakeholder  
+**Related requirements:** FR-05, FR-37, FR-41, FR-44
+
+The owner of a meeting shares it with the stakeholder. The stakeholder sees the meeting in the meeting list and reads its transcript, decisions and action items. An attempt to approve an action item is refused, because the stakeholder's role is Viewer. A meeting that was not shared with the stakeholder does not appear in the list, and a direct request for it is answered with *404 Not Found*. When the owner stops sharing the meeting, it no longer appears in the stakeholder's list.
+
+**SC-06 — Cleaning up after the sprint**  
+**Persona:** P-02 — Software developer (with P-01 — Engineering manager)  
+**Related requirements:** FR-38, FR-42, FR-43
+
+After the approved items of a meeting have been exported, the developer, who owns the meeting, deletes its recording. The recording and any audio extracted from it are deleted, while the transcript, the items and the Jira issue keys remain. The playback area tells the user that the recording is no longer available. Another meeting is no longer needed, so the developer deletes the whole meeting; its recording, transcript, items and decisions are removed, and the Jira issues already created from it are not changed. The engineering manager, as Admin, can delete the recording or the meeting of any owner in the same way.
+
 #### User Stories
 
 The user stories of the system with their priority. Their links to the WBS activities of the Project Plan are given in the next table.
@@ -348,6 +387,43 @@ The user stories of the system with their priority. Their links to the WBS activ
 | US-11 | Medium | As a **Member**, I want to play the recording next to the transcript and jump to a line by selecting it, so that I can check what was actually said. | FR-37, FR-38, FR-39, FR-40 |
 | US-12 | High | As a **Member**, I want to share a meeting with chosen teammates, so that they can read it without everyone seeing all meetings. | FR-37, FR-41, FR-44 |
 | US-13 | Medium | As a **Member**, I want to delete the recording or the whole meeting when I no longer need it, so that sensitive speech is not kept longer than needed. | FR-42, FR-43 |
+
+#### User Stories Linked to the Project Plan
+
+The table below gives a user story (`US-##`) for each user-facing WBS activity of the Project Plan (Section 2). User stories US-01 to US-13 are the stories that the acceptance criteria in Appendix A refer to. Activities that are purely internal or technical have no user story; the reason is given instead.
+
+| Scenario ID | Project Plan WBS activity ID | User story | Related requirement ID(s) |
+|---|---|---|---|
+| SC-05 | WBS-1.1 | **US-14:** As a Member, I want my meetings and the shares I grant to be stored with my account, so that only I and the people I choose can see them. | FR-03, FR-37, FR-41 |
+| SC-01 | WBS-1.2 | **US-01:** As a **team member**, I want to register and log in, so that my uploads and reviews are tied to me. | FR-01, FR-02 |
+| SC-01 | WBS-1.2 | **US-02:** As an **Admin**, I want actions to be limited by role, so that only the right people can change items, export or configure Jira. | FR-03, FR-04, FR-05, FR-06 |
+| SC-01 | WBS-1.3 | **US-15:** As an Admin, I want the Jira API token to be stored encrypted, so that the team's Jira is not exposed if the stored data leaks. | FR-30 |
+| SC-02 | WBS-2.1 | **US-03:** As a **Member**, I want to upload a meeting recording, so that I do not have to take notes by hand. | FR-07, FR-08, FR-09 |
+| SC-06 | WBS-2.1 | **US-13:** As a **Member**, I want to delete the recording or the whole meeting when I no longer need it, so that sensitive speech is not kept longer than needed. | FR-42, FR-43 |
+| — | WBS-3.1 | No user story: the backend skeleton and data-access layer are internal. They support every functional requirement but have no behavior of their own that a user sees. | — |
+| SC-02 | WBS-3.2 | **US-04:** As a **Member**, I want to see the processing status of my recording, so that I know when the results are ready or what went wrong. | FR-10, FR-11, FR-12, FR-13, FR-14 |
+| SC-02 | WBS-3.3 | **US-16:** As a Member, I want to see the status and the queue position of my job, so that I know when the results will be ready. | FR-11 |
+| SC-02 | WBS-3.4 | **US-17:** As a Member, I want the processing stages to run in the right order and to see which stage failed, so that no unmasked text leaves the system and I know what went wrong. | FR-13, FR-21 |
+| SC-03 | WBS-4.1 | **US-18:** As a Member, I want to upload a video recording and still get a transcript, so that I can use the format our meeting tool produces. | FR-15 |
+| SC-03 | WBS-5.1 | **US-19:** As a Member, I want a transcript with a start and end time for every segment, so that I can find what was said and when. | FR-16 |
+| SC-02 | WBS-6.1 | **US-20:** As a Member, I want to give the number of speakers when I upload, so that the speakers are separated more accurately. | FR-09, FR-17 |
+| SC-03 | WBS-6.2 | **US-05:** As a **Member**, I want a timestamped transcript with speaker labels that I can rename, so that I know who said what. | FR-15, FR-16, FR-17, FR-18, FR-19 |
+| — | WBS-6.3 | No user story: benchmarking and tuning are internal. They measure WER, DER and processing time and fix the default configuration (NFR-07, NFR-14). | — |
+| SC-03 | WBS-7.1 | **US-06:** As a **Member**, I want secrets and e-mail addresses removed from the transcript, so that they never leave the system. | FR-20, FR-21 |
+| — | WBS-8.0 | No user story: setting up the inference engine is internal. It enables FR-22 to FR-24 in both modes. | — |
+| SC-04 | WBS-8.1 | **US-21:** As a Member, I want each action item to have a title, a description, a priority and an assignee, and each decision a statement and a rationale, so that the items are ready for review and Jira. | FR-22, FR-23, FR-24 |
+| SC-04 | WBS-8.2 | **US-07:** As a **Member**, I want the action items and decisions extracted automatically, so that nothing agreed in the meeting is lost. | FR-22, FR-23, FR-24 |
+| SC-04 | WBS-9.1 | **US-22:** As a Member, I want my edits, approvals and rejections to be saved, so that the review survives a page reload and changed items are approved again. | FR-26, FR-27 |
+| SC-04 | WBS-9.2 | **US-08:** As a **Member**, I want to edit, approve or reject the extracted items, so that only correct items reach the backlog. | FR-25, FR-26, FR-27, FR-28 |
+| SC-01 | WBS-10.1 | **US-09:** As an **Admin**, I want to connect Epilogos to our Jira project, so that approved items can be exported. | FR-29, FR-30 |
+| SC-04 | WBS-10.2 | **US-10:** As a **Member**, I want to export the approved items to Jira in one action, so that they reach the sprint backlog without retyping. | FR-31, FR-32, FR-33, FR-34, FR-35, FR-36 |
+| SC-05 | WBS-11.1 | **US-12:** As a **Member**, I want to share a meeting with chosen teammates, so that they can read it without everyone seeing all meetings. | FR-37, FR-41, FR-44 |
+| SC-03 | WBS-11.2 | **US-11:** As a **Member**, I want to play the recording next to the transcript and jump to a line by selecting it, so that I can check what was actually said. | FR-37, FR-38, FR-39, FR-40 |
+| — | WBS-12.1 | No user story: the Docker Compose environment and the basic CI are internal. | — |
+| — | WBS-12.2 | No user story: the CI/CD pipeline and the cloud deployment are internal (NFR-16). | — |
+| — | WBS-12.3 | No user story: the test infrastructure verifies the acceptance criteria in Appendix A. | — |
+| — | WBS-12.4 | No user story: system integration and demo preparation cover all requirements together. | — |
+| — | WBS-13.1 to WBS-13.5 | No user story: course reports and documentation are project deliverables (D-08), not system behavior. | — |
 
 ---
 
