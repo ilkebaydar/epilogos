@@ -256,6 +256,65 @@ Target users are agile software teams and engineering managers (Charter §3).
 Scenario IDs (`SC-##`) are used as test names (`test_SC##_...`) so that every test traces back to a scenario and a requirement. Each feature below can be saved as a `.feature` file under `tests/`.
 ```gherkin
 Feature: Accounts and access control   # US-01, US-02
+
+  @SC-01 @FR-01
+  Scenario: A registered user logs in
+    Given a user registered with "dev@example.com" and a valid password
+    When the user logs in with the same e-mail and password
+    Then the system issues an access token
+
+  @SC-02 @FR-02 @FR-06
+  Scenario: An expired token is rejected
+    Given a user whose access token has expired
+    When the user requests the meeting list
+    Then the system answers "401 Unauthorized"
+
+  @SC-50 @FR-02
+  Scenario: A refresh token gives a new access token
+    Given a user whose access token expired and whose refresh token was issued 2 days ago
+    When the user asks for a new access token with the refresh token
+    Then the system issues a new access token
+
+  @SC-03 @FR-03 @FR-05 @FR-06
+  Scenario: A Viewer cannot approve an item
+    Given a logged-in user with role "Viewer"
+    And a meeting with a pending action item
+    When the user tries to approve the action item
+    Then the system answers "403 Forbidden"
+    And the item stays "pending"
+
+  @SC-04 @FR-04 @FR-06
+  Scenario: A Member cannot change the Jira connection
+    Given a logged-in user with role "Member"
+    When the user tries to save a Jira connection
+    Then the system answers "403 Forbidden"
+
+  @SC-44 @FR-01
+  Scenario: A newly registered user becomes a Member
+    Given no account exists for "new@example.com"
+    When a person registers with "new@example.com" and a valid password
+    Then an account with the role "Member" is created
+
+  @SC-45 @FR-03 @FR-06
+  Scenario: Only an Admin can change a role
+    Given a Member "M" and an Admin "A"
+    When "M" tries to change the role of another user to "Admin"
+    Then the system answers "403 Forbidden"
+    When "A" changes the role of "M" to "Viewer"
+    Then "M" has the role "Viewer"
+
+  @SC-37 @FR-01
+  Scenario: A wrong password is refused
+    Given a user registered with "dev@example.com"
+    When someone logs in with "dev@example.com" and a wrong password
+    Then no access token is issued
+
+  @SC-38 @NFR-17
+  Scenario: A password that is too short is refused
+    Given a person registering with a password shorter than the minimum length
+    When the person submits the registration
+    Then the registration is refused
+    And no account is created
 ```
 
 ```gherkin
@@ -322,7 +381,7 @@ Feature: Background processing and progress   # US-04
 ```
 
 ```gherkin
-Feature: Transcript and speakers   # US-05 
+Feature: Transcript and speakers   # US-05
 
   @SC-11 @FR-15 @FR-16
   Scenario: A video recording produces a timestamped transcript
@@ -353,7 +412,7 @@ Feature: Transcript and speakers   # US-05
 ```
 
 ```gherkin
-Feature: Masking of sensitive data   # US-06 
+Feature: Masking of sensitive data   # US-06
 
   @SC-14 @FR-20
   Scenario: Secrets are masked before the transcript is stored
@@ -534,6 +593,53 @@ Feature: Meeting dashboard and synchronized playback   # US-11
 
 ```gherkin
 Feature: Meeting access and data lifecycle   # US-12, US-13
+
+  @SC-30 @FR-37 @FR-44 @NFR-18
+  Scenario: A user cannot open another user's meeting
+    Given a Member "A" and a meeting uploaded by Member "B" that is not shared with "A"
+    When "A" requests that meeting by its identifier
+    Then the system answers "404 Not Found"
+    And the meeting is not listed for "A"
+
+  @SC-31 @FR-41
+  Scenario: A shared meeting becomes readable
+    Given a meeting owned by Member "B" and a Viewer "V"
+    When "B" shares the meeting with "V"
+    Then "V" sees the meeting in the list and can read its transcript and items
+
+  @SC-32 @FR-41
+  Scenario: Stopping a share removes access
+    Given a meeting shared with Viewer "V"
+    When the owner stops sharing it
+    Then "V" no longer sees the meeting
+
+  @SC-33 @FR-37
+  Scenario: An Admin sees all meetings
+    Given meetings uploaded by two different Members
+    When an Admin opens the meeting list
+    Then both meetings are listed
+
+  @SC-34 @FR-42 @FR-38 @NFR-20
+  Scenario: Deleting the recording keeps the transcript
+    Given a completed meeting whose recording exists
+    When the owner deletes the recording
+    Then the recording and any audio extracted from it are deleted
+    And the transcript, the items and the Jira issue keys remain
+    And the playback area tells the user that the recording is no longer available
+
+  @SC-35 @FR-42
+  Scenario: Only the owner or an Admin can delete the recording
+    Given a meeting owned by Member "B" and shared with Member "A"
+    When "A" tries to delete the recording
+    Then the deletion is refused
+    And the recording remains
+
+  @SC-36 @FR-43
+  Scenario: Deleting a meeting removes its data
+    Given a completed meeting with a transcript, items and a recording
+    When the owner deletes the meeting
+    Then the recording, transcript, items and decisions are removed
+    And the Jira issues that were already created are not changed
 ```
 
 ---
