@@ -33,6 +33,7 @@ Out of scope (Plan §1.1, Charter §3): live call bots and real-time transcripti
 | Recording | An audio or video file of a meeting that ended before upload (MP4, MKV or WAV). |
 | Job | The background processing of one recording, from upload until its items are ready or it fails. |
 | Job status | One of `queued`, `preprocessing`, `transcribing`, `diarizing`, `masking`, `extracting`, `completed`, `failed` (Plan T-03). |
+| Checkpoint | The saved output of a completed processing stage: the extracted audio, the speaker turns, the masked transcript or the extracted items. An interrupted job continues from its last checkpoint. Unmasked transcript text is never part of a checkpoint (FR-20). |
 | Transcript segment | A part of the transcript with a start time, an end time and text. In local mode it also has a speaker label. |
 | Speaker label | A name for one speaker inside one meeting, initially generated (e.g., "Speaker 1") and renamable by the user. It has no meaning outside its meeting. |
 | Sensitive data | API keys, access tokens, passwords and e-mail addresses that appear in a transcript (Plan T-07), including values that are introduced by a spoken cue (for example "the password is ..."). |
@@ -194,13 +195,15 @@ Each requirement is linked to the matching task(s) and deliverable(s) of the Pro
 | FR-42 | T-02 | D-01 | The owner of a meeting or an Admin **shall** be able to delete the recording of the meeting, together with any audio extracted from it. The transcript, the items, the decisions and the Jira issue keys **shall** remain. | Should | The owner deletes the recording; the recording and extracted audio are gone while the transcript, items and Jira issue keys remain; a non-owner Member is refused. (AC-34, AC-35) |
 | FR-43 | T-02 | D-01 | The owner or an Admin **shall** be able to delete a meeting. Deleting a meeting **shall** remove its recording, transcript, items and decisions from the system. Jira issues that were already created **shall not** be changed. | Should | The owner deletes a meeting; its recording, transcript, items and decisions are removed and existing Jira issues are not changed. (AC-36) |
 | FR-44 | T-01 | D-06, D-01 | For a user who neither owns a meeting nor has it shared with them, the meeting **shall** not appear in lists, and a direct request for it **shall** be answered with *404 Not Found*. | Must | A Member requests a meeting of another Member that is not shared with them by its identifier and gets 404; the meeting is not in their list. (AC-30) |
+| FR-45 | T-03 | D-01 | After each processing stage completes, the system **shall** save its output as a checkpoint. If the processing worker stops while a job is running, the job **shall** continue after its last checkpoint instead of starting again. Unmasked transcript text **shall not** be saved in a checkpoint, so a job interrupted before masking completes **shall** run transcription again. An interruption **shall** count as one attempt of the interrupted stage (FR-13). | Must | The worker is stopped while a job is `extracting`; after the restart the job continues with extraction without running audio extraction, transcription or masking again, and ends as `completed`. (AC-53, AC-54, AC-56) |
+| FR-46 | T-03 | D-01 | A job interrupted by a stop of the processing worker **shall** be continued before any `queued` job, and the `queued` jobs **shall** keep their order. | Must | Two jobs are `queued` when the worker stops during a third job; after the restart the interrupted job is continued first, then the two queued jobs in their order. (AC-55) |
 
 **Functional requirement notes:**  
 - **Wording.** **shall** = mandatory, **should** = desirable, **may** = optional. Terms such as job status, sensitive data, masking, action item, decision and item state are defined in the Glossary (Section 1.3).
 - **Priority.** *Must* is the priority of access control and the upload → review → export flow; *Should* is the priority of playback (FR-38 to FR-40) and manual deletion (FR-42, FR-43).
 - **Verification.** The acceptance criteria named in the last column (`AC-##`) are the Gherkin scenarios of Appendix A; their IDs are used as test names (`test_AC##_...`).
 - **Sources and rationale.** The source and the rationale of every requirement are given in the table below. Requirements that were added after the Project Plan come from the elicitation items of Appendix C (`E-##`) and are mapped to an existing WBS activity in Appendix B.
-- **Business rules.** Anyone can register and gets the role Member; the first Admin is created during system setup, and only an Admin changes roles. The access token is valid for 30 minutes and the refresh token for 7 days. At upload the title is required, the meeting date is optional (default: upload date), and the number of speakers is optional and used only in local mode. An `exported` item cannot be edited (changes are made in Jira, since export is one-way), and editing an `approved` item sets it back to `pending`. Every exported item becomes a Jira task, or a sub-task of the parent issue chosen during review; the assignee is a Jira account chosen from the users of the target project.
+- **Business rules.** Anyone can register and gets the role Member; the first Admin is created during system setup, and only an Admin changes roles. The access token is valid for 30 minutes and the refresh token for 7 days. At upload the title is required, the meeting date is optional (default: upload date), and the number of speakers is optional and used only in local mode. An `exported` item cannot be edited (changes are made in Jira, since export is one-way), and editing an `approved` item sets it back to `pending`. Every exported item becomes a Jira task, or a sub-task of the parent issue chosen during review; the assignee is a Jira account chosen from the users of the target project. Job states and checkpoints (FR-45) are kept in the database and in file storage, not in the queue broker, so an interrupted job can be continued even if the queue broker loses its messages. In cloud mode, where uploaded media is stored only temporarily (Plan §1.1), a job whose recording or checkpoint no longer exists becomes `failed`, and the message says that the recording must be uploaded again.
 
 | Requirement ID | Source | Rationale |
 |---|---|---|
@@ -248,6 +251,8 @@ Each requirement is linked to the matching task(s) and deliverable(s) of the Pro
 | FR-42 | E-14 | The recording is the only copy of the meeting that masking does not change. Deletion is manual: no automatic deletion runs on the free hosting tier (CON-01). |
 | FR-43 | E-14 | Data minimization: users must be able to remove what they uploaded. |
 | FR-44 | E-06, Plan §1.4 Security | Does not reveal that a meeting exists, and complements the role rules of FR-06. |
+| FR-45 | Plan §1.4 Reliability, WBS-3.2, T-07 | A stage can take as long as the meeting itself, so repeating completed stages after a worker restart wastes GPU time (NFR-07). Unmasked text is not saved because masking must happen before storage (FR-20). Counting an interruption as an attempt stops a recording that crashes the worker from being repeated without end. |
+| FR-46 | Plan §1.1 Concurrency, R-12 | A job that was already running should not wait behind jobs that were uploaded after it. |
 
 ### 2.2 Non-functional Requirements
 
@@ -267,7 +272,7 @@ Each quality attribute below is measurable, or is measured and reported where no
 | NFR-10 | Usability | At least 2 of 3 users outside the team **shall** complete the upload → review → export flow with a prepared sample recording, without help and within 10 minutes (processing time excluded). | UT-01, UT-02 (FR-07, FR-25 to FR-31) | Task-based walkthrough with 3 external users; every point where a user gets stuck is recorded in the Test Report. |
 | NFR-11 | Accessibility | The main pages **shall** reach a Lighthouse accessibility score of at least 85. | All pages (UT-01 to UT-03) | Lighthouse report. |
 | NFR-12 | Compatibility | The web interface **shall** work on current Chrome and Firefox, and **shall** be usable on desktop and tablet screens. | All pages (UT-01 to UT-03) | Manual check on both browsers and screen sizes. |
-| NFR-13 | Reliability | A job's state **shall** survive a restart of the processing worker. | FR-10 to FR-14 | Fault-injection test (worker restart). |
+| NFR-13 | Reliability | A job's state **shall** survive a restart of the processing worker. | FR-10 to FR-14, FR-45, FR-46 | Fault-injection test (worker restart). |
 | NFR-14 | AI quality | With the default configuration fixed in WBS-6.3, on the AMI headset-mix subset, the word error rate (WER) **shall** be at most 25% and the diarization error rate (DER) at most 30%. | FR-16, FR-17 | Benchmark run (WBS-6.3), reported in the Test Report together with the model and settings used. |
 | NFR-15 | AI quality | On benchmark samples (AMI, QMSum, MeetingBank), the DeepEval faithfulness score of the extracted items **shall** be at least 0.80. | FR-22 to FR-24 | DeepEval run, reported in the Test Report together with the judge model used. |
 | NFR-16 | Maintainability | Backend line coverage **shall** be at least 70%, and a change **shall** be merged only if CI passes. | Whole system (backend code) | Coverage report in CI; branch protection. |
@@ -340,9 +345,9 @@ The engineering manager logs in with the Admin account that was created during s
 
 **SC-02 — Uploading a sprint planning recording**  
 **Persona:** P-02 — Software developer  
-**Related requirements:** FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, FR-14
+**Related requirements:** FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, FR-14, FR-45, FR-46
 
-After a sprint planning, the developer wants its outcomes in Jira without taking notes by hand. A PDF file selected by mistake is rejected, and the message names the format rule. The developer uploads the 20-minute MP4 recording of 300 MB with the title "Sprint 12 planning". The system creates the meeting and starts a processing job. Because another job is being processed, the new job is `queued` and its queue position is shown. The developer leaves the page; when they come back, the job is `completed`. If a stage keeps failing, the job becomes `failed`, the message names the stage, and the developer re-submits the job without uploading the file again.
+After a sprint planning, the developer wants its outcomes in Jira without taking notes by hand. A PDF file selected by mistake is rejected, and the message names the format rule. The developer uploads the 20-minute MP4 recording of 300 MB with the title "Sprint 12 planning". The system creates the meeting and starts a processing job. Because another job is being processed, the new job is `queued` and its queue position is shown. The developer leaves the page; when they come back, the job is `completed`. If the processing worker restarts during the job, the job continues after its last completed stage, before the jobs that are still queued. If a stage keeps failing, the job becomes `failed`, the message names the stage, and the developer re-submits the job without uploading the file again.
 
 **SC-03 — Reading the transcript of a meeting**  
 **Persona:** P-02 — Software developer  
@@ -377,7 +382,7 @@ The user stories of the system with their priority. Their links to the WBS activ
 | US-01 | High | As a **team member**, I want to register and log in, so that my uploads and reviews are tied to me. | FR-01, FR-02 |
 | US-02 | High | As an **Admin**, I want actions to be limited by role, so that only the right people can change items, export or configure Jira. | FR-03, FR-04, FR-05, FR-06 |
 | US-03 | High | As a **Member**, I want to upload a meeting recording, so that I do not have to take notes by hand. | FR-07, FR-08, FR-09 |
-| US-04 | High | As a **Member**, I want to see the processing status of my recording, so that I know when the results are ready or what went wrong. | FR-10, FR-11, FR-12, FR-13, FR-14 |
+| US-04 | High | As a **Member**, I want to see the processing status of my recording, so that I know when the results are ready or what went wrong. | FR-10, FR-11, FR-12, FR-13, FR-14, FR-45, FR-46 |
 | US-05 | High | As a **Member**, I want a timestamped transcript with speaker labels that I can rename, so that I know who said what. | FR-15, FR-16, FR-17, FR-18, FR-19 |
 | US-06 | High | As a **Member**, I want secrets and e-mail addresses removed from the transcript, so that they never leave the system. | FR-20, FR-21 |
 | US-07 | High | As a **Member**, I want the action items and decisions extracted automatically, so that nothing agreed in the meeting is lost. | FR-22, FR-23, FR-24 |
@@ -401,7 +406,7 @@ The table below gives a user story (`US-##`) for each user-facing WBS activity o
 | SC-02 | WBS-2.1 | **US-03:** As a **Member**, I want to upload a meeting recording, so that I do not have to take notes by hand. | FR-07, FR-08, FR-09 |
 | SC-06 | WBS-2.1 | **US-13:** As a **Member**, I want to delete the recording or the whole meeting when I no longer need it, so that sensitive speech is not kept longer than needed. | FR-42, FR-43 |
 | — | WBS-3.1 | No user story: the backend skeleton and data-access layer are internal. They support every functional requirement but have no behavior of their own that a user sees. | — |
-| SC-02 | WBS-3.2 | **US-04:** As a **Member**, I want to see the processing status of my recording, so that I know when the results are ready or what went wrong. | FR-10, FR-11, FR-12, FR-13, FR-14 |
+| SC-02 | WBS-3.2 | **US-04:** As a **Member**, I want to see the processing status of my recording, so that I know when the results are ready or what went wrong. | FR-10, FR-11, FR-12, FR-13, FR-14, FR-45, FR-46 |
 | SC-02 | WBS-3.3 | **US-16:** As a Member, I want to see the status and the queue position of my job, so that I know when the results will be ready. | FR-11 |
 | SC-02 | WBS-3.4 | **US-17:** As a Member, I want the processing stages to run in the right order and to see which stage failed, so that no unmasked text leaves the system and I know what went wrong. | FR-13, FR-21 |
 | SC-03 | WBS-4.1 | **US-18:** As a Member, I want to upload a video recording and still get a transcript, so that I can use the format our meeting tool produces. | FR-15 |
@@ -504,7 +509,7 @@ flowchart LR
     UC01 --- UT05
 ```
 
-**Functionality covered:** T-02 to T-08 / FR-07 to FR-18, FR-20 to FR-24 / UC-01  
+**Functionality covered:** T-02 to T-08 / FR-07 to FR-18, FR-20 to FR-24, FR-45, FR-46 / UC-01  
 **Diagram notes:** The Member uploads a recording and follows its job. The stages run in a fixed order: audio extraction, transcription, speaker labelling in local mode, masking and extraction. Masking always runs before any text reaches an LLM. The cloud services are used only in cloud mode.
 
 #### 3.3.4 Functionality-Specific Use Case Diagram — Review and Jira Export
@@ -578,7 +583,7 @@ Every planned feature of the Project Plan (T-01 to T-11) has at least one use ca
 |---|---|---|---|
 | T-01 | FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-30, FR-41, FR-44 | UC-03, UC-04, UC-05, UC-06 | SC-01, SC-05 |
 | T-02 | FR-07, FR-08, FR-09, FR-42, FR-43 | UC-01, UC-03 | SC-02, SC-06 |
-| T-03 | FR-10, FR-11, FR-12, FR-13, FR-14 | UC-01 | SC-02 |
+| T-03 | FR-10, FR-11, FR-12, FR-13, FR-14, FR-45, FR-46 | UC-01 | SC-02 |
 | T-04 | FR-15 | UC-01 | SC-03 |
 | T-05 | FR-16 | UC-01 | SC-03 |
 | T-06 | FR-17, FR-18 | UC-01 | SC-03 |
@@ -601,7 +606,7 @@ T-12 (testing, CI/CD and deployment) and T-13 (project documentation) are not fe
 | **Goal / Purpose** | The user turns a meeting recording into a masked transcript and extracted items without taking notes by hand. |
 | **Actor(s)** | UT-02 — Member (or UT-01 Admin); secondary actors: processing worker; UT-05 — cloud speech-to-text and LLM APIs (cloud mode only) |
 | **Related Project Plan task(s)** | T-02, T-03, T-04, T-05, T-06, T-07, T-08 |
-| **Related functional requirement(s)** | FR-07 to FR-18, FR-20 to FR-24 |
+| **Related functional requirement(s)** | FR-07 to FR-18, FR-20 to FR-24, FR-45, FR-46 |
 
 **Pre-condition(s):**  
 The user is logged in with role Admin or Member.
@@ -630,6 +635,7 @@ The user is logged in with role Admin or Member.
 
 - **E1 — The file breaks a rule (occurs at step 2):** The upload is rejected and the reason is shown (FR-08). The use case ends.
 - **E2 — A stage fails (occurs at steps 4–6):** It is retried up to 3 times. If it still fails, the job becomes `failed` with the stage name (FR-13). The user may re-submit the job (FR-14).
+- **E3 — The processing worker stops (occurs at steps 4–6):** After the restart, the job continues after its last checkpoint, before any queued job (FR-45, FR-46). The interruption counts as one attempt of the stage (FR-13).
 
 **Post-condition(s):**  
 The meeting has a masked transcript and extracted items in `pending` state, or the job is `failed` with a stage-specific error.
@@ -988,6 +994,40 @@ Feature: Background processing and progress   # US-04
     Given a job in status "failed"
     When a Member re-submits the job
     Then the job is "queued" again without a new upload
+
+  @AC-53 @FR-45 @NFR-13
+  Scenario: An interrupted job continues after its last checkpoint
+    Given a job whose masked transcript has been saved
+    And the processing worker stopped while the job was "extracting"
+    When the processing worker is restarted
+    Then the job continues with the "extracting" stage
+    And audio extraction, transcription and masking are not run again
+    And the job ends as "completed"
+
+  @AC-54 @FR-45 @FR-20
+  Scenario: A job interrupted before masking keeps no unmasked text
+    Given the processing worker stopped while a job was "diarizing"
+    When the processing worker is restarted
+    Then audio extraction is not run again
+    And transcription is run again
+    And no unmasked transcript text is saved at any point
+
+  @AC-55 @FR-46
+  Scenario: An interrupted job is continued before queued jobs
+    Given two jobs are "queued" at positions 1 and 2
+    And the processing worker stopped while a third job was "transcribing"
+    When the processing worker is restarted
+    Then the interrupted job is continued first
+    And the two queued jobs are processed after it in their order
+
+  @AC-56 @FR-45 @FR-13
+  Scenario: A job that stops the worker on every attempt does not block the queue
+    Given the processing worker stops on every attempt of a job's "diarizing" stage
+    And another job is "queued"
+    When the processing worker is restarted after each stop
+    Then the "diarizing" stage is attempted at most 3 more times
+    And the job becomes "failed" with an error message that names the "diarizing" stage
+    And the queued job is processed after it
 ```
 
 ```gherkin
@@ -1304,10 +1344,12 @@ Every requirement links back to the Project Plan (task and WBS activity) and for
 | FR-42 | T-02 | WBS-2.1 | US-13 | AC-34, AC-35 | Set in the Plan revision |
 | FR-43 | T-02 | WBS-2.1 | US-13 | AC-36 | Set in the Plan revision |
 | FR-44 | T-01 | WBS-1.2 | US-12 | AC-30 | v0.2 |
+| FR-45 | T-03 | WBS-3.2, 3.4 | US-04 | AC-53, AC-54, AC-56 | v0.2 (checkpoints of the stub stages, WBS-3.2); v0.4 (real stages, WBS-3.4) |
+| FR-46 | T-03 | WBS-3.2 | US-04 | AC-55 | v0.2 |
 
 Non-functional requirements are verified by the tests and measurements listed in Section 2.2. Their results are reported in the Software Test Report (WBS-13.4).
 
-**Coverage:** all 44 functional requirements have at least one acceptance scenario. NFR-17 to NFR-20 are covered by AC-38, AC-30, AC-40 and AC-34.
+**Coverage:** all 46 functional requirements have at least one acceptance scenario. NFR-17 to NFR-20 are covered by AC-38, AC-30, AC-40 and AC-34.
 
 **Plan revision notes:** the requirements below are not yet written in the Project Plan. Each one is added to an existing WBS activity, so the WBS, the estimates and the schedule do not change; the Plan revision only has to add them to the activity descriptions.
 
@@ -1321,6 +1363,7 @@ Non-functional requirements are verified by the tests and measurements listed in
 | FR-27 (`exported` state) | WBS-9.1, WBS-10.2 | |
 | FR-32 (parent choice for sub-tasks) | WBS-9.2 (field on the review page), WBS-10.2 | |
 | FR-09 (title, meeting date, number of speakers) | WBS-2.1, WBS-11.1 (upload form) | The number of speakers is the hint already planned in WBS-6.1. |
+| FR-45, FR-46 (checkpoints, continuing interrupted jobs first) | WBS-3.2 (checkpoint and resume in the stub chain), WBS-3.4 (each real stage saves its output) | WBS-3.2 already includes the job state machine with persisted state transitions, and Plan §1.4 already requires that job state survives worker restarts. |
 
 ---
 
